@@ -1,0 +1,474 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Factorio Spot Price Server via Docker / ECS
+Parameters:
+
+  FactorioImageTag:
+    Type: String
+    Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/dtandersen/factorio/)"
+    Default: latest
+
+  ServerState:
+    Type: String
+    Description: "Running: A spot instance will launch shortly after setting this parameter. Stopped: Your spot instance will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues: 
+    - Running
+    - Stopped
+
+  InstanceType:
+    Type: String
+    Description: "m3.medium is a good cost effective (albeit older) instance, 1 VCPU and 3.75 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
+    Default: m3.medium
+
+  SpotPrice:
+    Type: String
+    Description: "An m3.medium shouldn't cost more than a cent per hour. Note: Leave this blank to use on-demand pricing."
+    Default: "0.05"
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  YourIp:
+    Type: String
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  HostedZoneId:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply the hosted zone ID here.
+    Default: ''
+
+  RecordName:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Essential Configuration
+        Parameters:
+        - FactorioImageTag
+        - ServerState
+        - InstanceType
+        - SpotPrice
+      - Label: 
+          default: Remote Access (SSH) Configuration (Optional)
+        Parameters:
+        - KeyPairName
+        - YourIp
+      - Label: 
+          default: DNS Configuration (Optional)
+        Parameters:
+        - HostedZoneId
+        - RecordName
+    ParameterLabels:
+      FactorioImageTag:
+        default: "Which version of Factorio do you want to launch?"
+      ServerState:
+        default: "Update this parameter to shut down / start up your Factorio server as required to save on cost. Takes a few minutes to take effect."
+      InstanceType:
+        default: "Which instance type?"
+      SpotPrice:
+        default: "Maximum spot price per hour? Leave blank to disable spot pricing."
+      KeyPairName:
+        default: "If you wish to access the instance via SSH, select a Key Pair to use."
+      YourIp:
+        default: "If you wish to access the instance via SSH, provide your public IP address."
+      HostedZoneId:
+        default: "If you have a hosted zone in Route 53 and wish to update a DNS record whenever your Factorio instance starts, supply the hosted zone ID here."
+      RecordName:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply a record name here (e.g. factorio.mydomain.com)."
+
+Conditions:
+  KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
+  IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
+  DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
+  SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
+
+
+Mappings:
+  Region:
+    'us-east-2':
+        ImageId: ami-00cffcd24cb08edf1
+    'us-east-1':
+        ImageId: ami-0bc08634af113cccb
+    'us-west-1':
+        ImageId: ami-05cc68a00d392447a
+    'us-west-2':
+        ImageId: ami-0054160a688deeb6a
+    'ap-east-1':
+        ImageId: ami-087f0e5fc12e0bc43
+    'ap-northeast-1':
+        ImageId: ami-00f839709b07ffb58
+    'ap-northeast-2':
+        ImageId: ami-0470f8828abe82a87
+    'ap-south-1':
+        ImageId: ami-0d143ad35f29ad632
+    'ap-southeast-1':
+        ImageId: ami-0c5b69a05af2f0e23
+    'ap-southeast-2':
+        ImageId: ami-011ce3fbe73731dfe
+    'ca-central-1':
+        ImageId: ami-039a05a64b90f63ee
+    'eu-central-1':
+        ImageId: ami-0ab1db011871746ef
+    'eu-north-1':
+        ImageId: ami-036cf93383aba5279
+    'eu-west-1':
+        ImageId: ami-09cd8db92c6bf3a84
+    'eu-west-2':
+        ImageId: ami-016a20f0624bae8c5
+    'eu-west-3':
+        ImageId: ami-0b4b8274f0c0d3bac
+    'sa-east-1':
+        ImageId: ami-04e333c875fae9d77
+    'us-gov-east-1':
+        ImageId: ami-04002561557e6b65d
+    'us-gov-west-1':
+        ImageId: ami-c8c6b1a9
+  ServerState:
+    Running:
+      AutoScalingCapacity: 1
+    Stopped:
+      AutoScalingCapacity: 0
+    
+
+Resources:
+
+  # ====================================================
+  # BASIC VPC
+  # ====================================================
+
+  Vpc: 
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.100.0.0/26
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+      - 0
+      - !GetAZs 
+        Ref: 'AWS::Region'
+      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      VpcId: !Ref Vpc  
+
+  SubnetARoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+
+  SubnetBRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetB  
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+      - 1
+      - !GetAZs 
+        Ref: 'AWS::Region'
+      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      VpcId: !Ref Vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: {}
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      VpcId: !Ref Vpc    
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  # ====================================================
+  # EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs:
+    Type: AWS::EFS::FileSystem
+    Properties: {}
+
+  MountA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs
+      SecurityGroups:
+      - !Ref EfsSg
+      SubnetId: !Ref SubnetA
+
+  MountB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs
+      SecurityGroups:
+      - !Ref EfsSg
+      SubnetId: !Ref SubnetB
+
+  EfsSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupName: factorio-efs
+      GroupDescription: factorio-efs
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg
+      VpcId: !Ref Vpc
+      
+  # ====================================================
+  # INSTANCE CONFIG
+  # ====================================================
+
+  Ec2Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupName: factorio-ec2
+      GroupDescription: factorio-ec2
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided 
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Ref YourIp
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      VpcId: !Ref Vpc
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !FindInMap [ Region, !Ref 'AWS::Region', ImageId ]
+      InstanceType: !Ref InstanceType
+      KeyName: 
+        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+      SecurityGroups:
+      - !Ref Ec2Sg
+      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install -y amazon-efs-utils
+          mkdir /opt/factorio
+          mount -t efs ${Efs}:/ /opt/factorio
+          chown 845:845 /opt/factorio
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config          
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+    - MountA
+    - MountB
+    Properties:
+      AutoScalingGroupName: factorio
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: root
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action: "route53:*"
+                Resource: "*"
+      RoleName: factorio-container-instance-role
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles:
+        - !Ref InstanceRole
+      InstanceProfileName: factorio-container-instance-role
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: factorio
+
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties: 
+      Cluster: !Ref EcsCluster
+      DesiredCount: 1
+      ServiceName: factorio
+      TaskDefinition: !Ref EcsTask  
+
+  EcsTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      Volumes:
+      - Host:
+          SourcePath: /opt/factorio
+        Name: factorio
+      ContainerDefinitions:
+      
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: dtandersen/factorio:0.17
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: factorio
+            ReadOnly: false
+
+  # ====================================================
+  # SET DNS RECORD
+  # ====================================================
+
+  SetDNSRecordLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: DnsConfigEnabled
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action: "route53:*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action: "ec2:DescribeInstance*"
+                Resource: "*"
+      RoleName: factorio-set-dns-role
+
+  SetDNSRecordLambda:
+    Type: "AWS::Lambda::Function"
+    Condition: DnsConfigEnabled
+    Properties: 
+      Environment:
+        Variables:
+          HostedZoneId: !Ref HostedZoneId
+          RecordName: !Ref RecordName
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          def handler(event, context):
+            new_instance = boto3.resource('ec2').Instance(event['detail']['EC2InstanceId'])
+            boto3.client('route53').change_resource_record_sets(
+              HostedZoneId= os.environ['HostedZoneId'],
+              ChangeBatch={
+                  'Comment': 'updating',
+                  'Changes': [
+                      {
+                          'Action': 'UPSERT',
+                          'ResourceRecordSet': {
+                              'Name': os.environ['RecordName'],
+                              'Type': 'A',
+                              'TTL': 60,
+                              'ResourceRecords': [
+                                  {
+                                      'Value': new_instance.public_ip_address
+                                  },
+                              ]
+                          }
+                      },
+                  ]
+              })
+      Description: Sets Route 53 DNS Record for Factorio
+      FunctionName: factorio-set-dns
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt SetDNSRecordLambdaRole.Arn
+      Runtime: python3.7
+      Timeout: 20
+
+  LaunchEvent:
+    Type: AWS::Events::Rule
+    Condition: DnsConfigEnabled
+    Properties: 
+      EventPattern:
+        source:
+        - aws.autoscaling
+        detail-type:
+        - EC2 Instance Launch Successful
+        detail:
+          AutoScalingGroupName:
+          - !Ref AutoScalingGroup
+      Name: Factorio-Instance-Launch
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SetDNSRecordLambda.Arn
+          Id: factorio-set-dns
+
+  LaunchEventLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: DnsConfigEnabled
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SetDNSRecordLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LaunchEvent.Arn
+
+Outputs:
+  CheckInstanceIp:
+    Description: To find your Factorio instance IP address, visit the following link. Click on the instance to find its Public IP address.
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#Instances:tag:aws:autoscaling:groupName=${AutoScalingGroup};sort=tag:Name"
