@@ -73,9 +73,18 @@ Update your CloudFormation stack. Change the server state parameter from "Runnin
 
 Delete the CloudFormation stack. Done.
 
-## What's Missing?
+**How can I upgrade the Factorio version?** 
 
-Probably a lot. 
+Update your CloudFormation stack. Set the required tag value for `FactorioImageTag`. Use the tags specified here: https://hub.docker.com/r/dtandersen/factorio/.
+
+**How can I change map settings, server settings etc.** 
+
+You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container using the following command: `sudo docker restart $(docker ps -q --filter name=ecs-factorio)`.
+
+## What's Missing / Not Supported?
+
+* Scenarios.
+* The security group on the EC2 instance prevents the RCON port from being exposed. I don't know what RCON does, if it's secure by default etc. I don't use it. You can open the port... just search the template for `27015` and uncomment the lines in the `Ec2Sg` resource.
 
 ## Expected Costs
 

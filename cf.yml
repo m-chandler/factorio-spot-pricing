@@ -261,6 +261,10 @@ Resources:
         ToPort: 34197
         IpProtocol: udp
         CidrIp: 0.0.0.0/0
+      # - FromPort: 27015
+      #   ToPort: 27015
+      #   IpProtocol: tcp
+      #   CidrIp: 0.0.0.0/0
       VpcId: !Ref Vpc
 
   LaunchConfiguration:
@@ -342,6 +346,9 @@ Resources:
       DesiredCount: 1
       ServiceName: factorio
       TaskDefinition: !Ref EcsTask  
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
 
   EcsTask:
     Type: AWS::ECS::TaskDefinition
@@ -350,11 +357,10 @@ Resources:
       - Host:
           SourcePath: /opt/factorio
         Name: factorio
-      ContainerDefinitions:
-      
+      ContainerDefinitions:      
         - Name: factorio
           MemoryReservation: 1024
-          Image: dtandersen/factorio:0.17
+          Image: !Sub "dtandersen/factorio:${FactorioImageTag}"
           PortMappings:
           - ContainerPort: 34197
             HostPort: 34197
