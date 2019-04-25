@@ -98,3 +98,9 @@ AWS do charge for data egress (i.e. data being sent from your Factorio server to
 ## Help / Support
 
 I've only tried this in the Sydney, Australia region (ap-southeast-2). The template is programmed such that it should work in any region, but this is yet to be proven. Maybe the m3.medium isn't available in all regions, maybe it isn't as cheap in other regions. Or maybe EFS isn't available in your region. I don't know, there's many variables. If you create a ticket on this repo and ask nicely, you may find that myself or someone else will assist.
+
+Be sure to check out dtandersen's repo. Unless your question is specifically related to the AWS deployment, you may find the information you're after there: https://hub.docker.com/r/dtandersen/factorio/.
+
+## Thanks
+
+Thanks goes out to dtandersen (and contributors) for maintaining the Factorio docker images. 
