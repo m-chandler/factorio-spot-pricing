@@ -24,12 +24,11 @@ A few notes on the services we're using...
 
 ## Getting Started
 
-1. Download `cf.yml`.
-2. Log into your AWS account.
-3. Select the region closest to you and your friends (top right).
-4. Go to [CloudFormation](https://console.aws.amazon.com/cloudformation/home) in the AWS console.
-5. Create Stack -> Upload template -> `cf.yml`.
-6. Give the stack a name - `factorio` should do just fine. If you want to access the instance remotely via SSH refer to the Remote Access section below. There should be no need to touch any other parameters. Continue through the rest of the deployment. 
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=factorio&templateURL=https://s3.amazonaws.com/factorio-spot-pricing/cf.yml)
+
+1. Click the above link, you'll need to log into your AWS account if you haven't already.
+2. Ensure you've selected a suitable AWS Region (closest to you) via the selector at the top right.
+3. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. You'll need a Key Pair and your Public IP address if you want to access the instance remotely via SSH (recommended). Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
 
 ## Next Steps
 
