@@ -6,12 +6,13 @@ The template contained within this repository can be used to deploy a Factorio s
 
 1. A basic understanding of Amazon Web Services, specifically CloudFormation.
 2. An AWS Account.
+3. Basic knowledge of Linux administration (no more than what would be required to just use the dtandersen Docker images).
 
 ## Overview
 
 The solution builds upon the Docker images so generously curated by dtandersen https://hub.docker.com/r/dtandersen/factorio/ (thank you!). 
 
-In a nutshell, the CloudFormation template launches an _ephemeral_ instance which joins itself to an Elastic Container Service (ECS) Cluster. Within this ECS Cluster, an ECS Service is configured to run a dtandersen Factorio Docker image. The ephemeral instance does not store any saves, mods, factorio config, factorio data etc - all of this state is stored on a network file system (Elastic File System - EFS).
+In a nutshell, the CloudFormation template launches an _ephemeral_ instance which joins itself to an Elastic Container Service (ECS) Cluster. Within this ECS Cluster, an ECS Service is configured to run a dtandersen Factorio Docker image. The ephemeral instance does not store any saves, mods, Factorio config, data etc. - all of this state is stored on a network file system (Elastic File System - EFS).
 
 The CloudFormation template is configured to launch this ephemeral instance using spot pricing. What is spot pricing you might ask? It's a way to save up to 90% on regular "on demand" pricing in AWS. There are drawbacks however. You're effectively participating in an auction to get a cheap instance. If demand increases and someone else puts in a higher bid than you, your instance will terminate in a matter of minutes. 
 
@@ -25,19 +26,29 @@ A few notes on the services we're using...
 
 1. Download `cf.yml`.
 2. Log into your AWS account.
-3. Go to CloudFormation in the AWS console.
-4. Create Stack -> Upload template -> `cf.yml`.
-5. Provide the required parameters, and continue through to deployment. 
+3. Select the region closest to you and your friends (top right).
+4. Go to [CloudFormation](https://console.aws.amazon.com/cloudformation/home) in the AWS console.
+5. Create Stack -> Upload template -> `cf.yml`.
+6. Give the stack a name - `factorio` should do just fine. If you want to access the instance remotely via SSH refer to the Remote Access section below. There should be no need to touch any other parameters. Continue through the rest of the deployment. 
 
 ## Next Steps
 
-All things going well, your Factorio server should be running in a few minutes. Go to the EC2 dashboard in the AWS console and you should see a Factorio server running. Take note of the public IP address. You should be able to fire up Factorio, and join via this IP address. No need to provide a port number, we're using Factorio's default. *Bonus points* - Public IP addresses are ugly. Refer to Custom Domain Name within Optional Features for a better solution. 
+All things going well, your Factorio server should be running in five minutes or so. Wait until CloudFormation reports the stack status as `CREATE_COMPLETE`. Go to the [EC2 dashboard in the AWS console](https://console.aws.amazon.com/ec2/v2/home?#Instances:sort=instanceId) and you should see a Factorio server running. Take note of the public IP address. You should be able to fire up Factorio, and join via this IP address. No need to provide a port number, we're using Factorio's default. *Bonus points* - Public IP addresses are ugly. Refer to Custom Domain Name within Optional Features for a better solution. 
+
+At this point you should *really* configure remote access as per the below section, so that you can access the server and modify `server-settings.json` (e.g. add a password, add to the Factorio server browser, whitelist admins etc.).
 
 ## Optional Features
 
 ### Remote Access
 
 If you know what you're doing, you might want to SSH onto the Linux instance to see what's going on / debug / make improvements. For security, SSH should be locked down to a known IP address (i.e. you), preventing malicious users from trying to break in (or worse - succeeeding). You'll need to create a Key Pair in AWS, find your public IP address, and then provide both of the parameters in the Remote Access (SSH) Configuration (Optional) section.
+
+For remote access, you'll need to:
+
+1. Create a [Key Pair](https://console.aws.amazon.com/ec2/v2/home#KeyPairs:sort=keyName) (Services > EC2 > Key Pairs). You'll need to use this to connect to the instance for additional setup.
+2. [Find your public IP address]((https://whatismyipaddress.com/)). You'll need this to connect to the instance for additional setup.
+
+If you're creating a new Factorio deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters.
 
 ### Custom Domain Name
 
@@ -75,16 +86,23 @@ Delete the CloudFormation stack. Done.
 
 **How can I upgrade the Factorio version?** 
 
-Update your CloudFormation stack. Set the required tag value for `FactorioImageTag`. Use the tags specified here: https://hub.docker.com/r/dtandersen/factorio/.
+Update your CloudFormation stack. Set the required tag value for `FactorioImageTag`. Use the tags specified here: https://hub.docker.com/r/dtandersen/factorio/. Your Factorio server will stop momentarily.
+
+**I'm running the "latest" version, and a new version has just been released. How do I update my server?** 
+
+You can force a redeployment of the service via ECS. [Update the service](https://console.aws.amazon.com/ecs/home?#/clusters/factorio/services/factorio/update), and select `Force new deployment`. 
 
 **How can I change map settings, server settings etc.** 
 
 You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container using the following command: `sudo docker restart $(docker ps -q --filter name=ecs-factorio)`.
 
+**I can no longer connect to my instance via SSH?** 
+
+Your public IP address has probably changed. [Check your public IP address]((https://whatismyipaddress.com/)) and update the stack, providing your new public IP address.
+
 ## What's Missing / Not Supported?
 
 * Scenarios.
-* The security group on the EC2 instance prevents the RCON port from being exposed. I don't know what RCON does, if it's secure by default etc. I don't use it. You can open the port... just search the template for `27015` and uncomment the lines in the `Ec2Sg` resource.
 
 ## Expected Costs
 
@@ -97,7 +115,7 @@ AWS do charge for data egress (i.e. data being sent from your Factorio server to
 
 ## Help / Support
 
-I've only tried this in the Sydney, Australia region (ap-southeast-2). The template is programmed such that it should work in any region, but this is yet to be proven. Maybe the m3.medium isn't available in all regions, maybe it isn't as cheap in other regions. Or maybe EFS isn't available in your region. I don't know, there's many variables. If you create a ticket on this repo and ask nicely, you may find that myself or someone else will assist.
+This has been tested in both the Sydney and Oregon AWS regions. Your mileage may vary. If you get stuck, create an issue and myself or someone else may come along and assist.
 
 Be sure to check out dtandersen's repo. Unless your question is specifically related to the AWS deployment, you may find the information you're after there: https://hub.docker.com/r/dtandersen/factorio/.
 

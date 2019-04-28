@@ -45,6 +45,14 @@ Parameters:
     Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply the name of the record here (e.g. factorio.mydomain.com).
     Default: ''
 
+  EnableRcon:
+    Type: String
+    Description: Refer to https://hub.docker.com/r/dtandersen/factorio/ for further RCON configuration details. This parameter simply opens / closes the port on the security group.
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -55,6 +63,7 @@ Metadata:
         - ServerState
         - InstanceType
         - SpotPrice
+        - EnableRcon
       - Label: 
           default: Remote Access (SSH) Configuration (Optional)
         Parameters:
@@ -82,12 +91,15 @@ Metadata:
         default: "If you have a hosted zone in Route 53 and wish to update a DNS record whenever your Factorio instance starts, supply the hosted zone ID here."
       RecordName:
         default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply a record name here (e.g. factorio.mydomain.com)."
+      EnableRcon:
+        default: "Do you wish to enable RCON?"
 
 Conditions:
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
+  DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
 
 
 Mappings:
@@ -255,16 +267,19 @@ Resources:
         - FromPort: 22
           ToPort: 22
           IpProtocol: tcp
-          CidrIp: !Ref YourIp
+          CidrIp: !Sub "${YourIp}/32"
         - !Ref 'AWS::NoValue'
       - FromPort: 34197
         ToPort: 34197
         IpProtocol: udp
         CidrIp: 0.0.0.0/0
-      # - FromPort: 27015
-      #   ToPort: 27015
-      #   IpProtocol: tcp
-      #   CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
   LaunchConfiguration:
@@ -325,14 +340,12 @@ Resources:
               - Effect: "Allow"
                 Action: "route53:*"
                 Resource: "*"
-      RoleName: factorio-container-instance-role
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties: 
       Roles:
         - !Ref InstanceRole
-      InstanceProfileName: factorio-container-instance-role
 
   EcsCluster:
     Type: AWS::ECS::Cluster
@@ -403,7 +416,6 @@ Resources:
               - Effect: "Allow"
                 Action: "ec2:DescribeInstance*"
                 Resource: "*"
-      RoleName: factorio-set-dns-role
 
   SetDNSRecordLambda:
     Type: "AWS::Lambda::Function"
