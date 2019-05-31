@@ -6,13 +6,13 @@ The template contained within this repository can be used to deploy a Factorio s
 
 1. A basic understanding of Amazon Web Services, specifically CloudFormation.
 2. An AWS Account.
-3. Basic knowledge of Linux administration (no more than what would be required to just use the dtandersen Docker images).
+3. Basic knowledge of Linux administration (no more than what would be required to just use the `factoriotools/factorio` Docker image).
 
 ## Overview
 
-The solution builds upon the Docker images so generously curated by dtandersen https://hub.docker.com/r/dtandersen/factorio/ (thank you!). 
+The solution builds upon the [factoriotools/factorio](https://hub.docker.com/r/factoriotools/factorio) Docker image, so generously curated by [the folks over at FactorioTools](https://github.com/orgs/factoriotools/people) (thank you!). 
 
-In a nutshell, the CloudFormation template launches an _ephemeral_ instance which joins itself to an Elastic Container Service (ECS) Cluster. Within this ECS Cluster, an ECS Service is configured to run a dtandersen Factorio Docker image. The ephemeral instance does not store any saves, mods, Factorio config, data etc. - all of this state is stored on a network file system (Elastic File System - EFS).
+In a nutshell, the CloudFormation template launches an _ephemeral_ instance which joins itself to an Elastic Container Service (ECS) Cluster. Within this ECS Cluster, an ECS Service is configured to run a Factorio Docker image. The ephemeral instance does not store any saves, mods, Factorio config, data etc. - all of this state is stored on a network file system (Elastic File System - EFS).
 
 The CloudFormation template is configured to launch this ephemeral instance using spot pricing. What is spot pricing you might ask? It's a way to save up to 90% on regular "on demand" pricing in AWS. There are drawbacks however. You're effectively participating in an auction to get a cheap instance. If demand increases and someone else puts in a higher bid than you, your instance will terminate in a matter of minutes. 
 
@@ -85,7 +85,7 @@ Delete the CloudFormation stack. Done.
 
 **How can I upgrade the Factorio version?** 
 
-Update your CloudFormation stack. Set the required tag value for `FactorioImageTag`. Use the tags specified here: https://hub.docker.com/r/dtandersen/factorio/. Your Factorio server will stop momentarily.
+Update your CloudFormation stack. Set the required tag value for `FactorioImageTag`. Use the tags specified here: https://hub.docker.com/r/factoriotools/factorio/. Your Factorio server will stop momentarily.
 
 **I'm running the "latest" version, and a new version has just been released. How do I update my server?** 
 
@@ -116,8 +116,11 @@ AWS do charge for data egress (i.e. data being sent from your Factorio server to
 
 This has been tested in both the Sydney and Oregon AWS regions. Your mileage may vary. If you get stuck, create an issue and myself or someone else may come along and assist.
 
-Be sure to check out dtandersen's repo. Unless your question is specifically related to the AWS deployment, you may find the information you're after there: https://hub.docker.com/r/dtandersen/factorio/.
+Be sure to check out factoriotools's repositories on Docker Hub and GitHub. Unless your question is specifically related to the AWS deployment, you may find the information you're after there:
+
+- Docker Hub: https://hub.docker.com/r/factoriotools/factorio/
+- GitHub: https://github.com/factoriotools/factorio-docker
 
 ## Thanks
 
-Thanks goes out to dtandersen (and contributors) for maintaining the Factorio docker images. 
+Thanks goes out to [FactorioTools](https://github.com/factoriotools) ([and contributors](https://github.com/factoriotools/factorio-docker/graphs/contributors)) for maintaining the Factorio Docker images.
