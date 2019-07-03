@@ -4,7 +4,7 @@ Parameters:
 
   FactorioImageTag:
     Type: String
-    Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/dtandersen/factorio/)"
+    Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/factoriotools/factorio/)"
     Default: latest
 
   ServerState:
@@ -47,7 +47,7 @@ Parameters:
 
   EnableRcon:
     Type: String
-    Description: Refer to https://hub.docker.com/r/dtandersen/factorio/ for further RCON configuration details. This parameter simply opens / closes the port on the security group.
+    Description: Refer to https://hub.docker.com/r/factoriotools/factorio/ for further RCON configuration details. This parameter simply opens / closes the port on the security group.
     Default: false
     AllowedValues:
     - true
@@ -373,7 +373,7 @@ Resources:
       ContainerDefinitions:      
         - Name: factorio
           MemoryReservation: 1024
-          Image: !Sub "dtandersen/factorio:${FactorioImageTag}"
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
           PortMappings:
           - ContainerPort: 34197
             HostPort: 34197
