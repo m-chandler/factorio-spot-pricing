@@ -114,7 +114,7 @@ AWS do charge for data egress (i.e. data being sent from your Factorio server to
 
 ## Help / Support
 
-This has been tested in both the Sydney and Oregon AWS regions. Your mileage may vary. If you get stuck, create an issue and myself or someone else may come along and assist.
+This has been tested in both the Sydney and Oregon AWS regions (verify your AWS region of choice includes m3.medium @ https://aws.amazon.com/ec2/spot/pricing and/or change as needed). Your mileage may vary. If you get stuck, create an issue and myself or someone else may come along and assist.
 
 Be sure to check out factoriotools's repositories on Docker Hub and GitHub. Unless your question is specifically related to the AWS deployment, you may find the information you're after there:
 
