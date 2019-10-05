@@ -209,8 +209,8 @@ Resources:
   EfsSg:
     Type: AWS::EC2::SecurityGroup
     Properties: 
-      GroupName: factorio-efs
-      GroupDescription: factorio-efs
+      GroupName: !Sub "${AWS::StackName}-efs"
+      GroupDescription: !Sub "${AWS::StackName}-efs"
       SecurityGroupIngress:
       - FromPort: 2049
         ToPort: 2049
@@ -225,8 +225,8 @@ Resources:
   Ec2Sg:
     Type: AWS::EC2::SecurityGroup
     Properties: 
-      GroupName: factorio-ec2
-      GroupDescription: factorio-ec2
+      GroupName: !Sub "${AWS::StackName}-ec2"
+      GroupDescription: !Sub "${AWS::StackName}-ec2"
       SecurityGroupIngress:
       - !If
         - IpAddressProvided 
@@ -275,7 +275,7 @@ Resources:
     - MountA
     - MountB
     Properties:
-      AutoScalingGroupName: factorio
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
       LaunchConfigurationName: !Ref LaunchConfiguration
       MaxSize: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
@@ -316,14 +316,14 @@ Resources:
   EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: factorio
+      ClusterName: !Sub "${AWS::StackName}-cluster"
 
   EcsService:
     Type: AWS::ECS::Service
     Properties: 
       Cluster: !Ref EcsCluster
       DesiredCount: 1
-      ServiceName: factorio
+      ServiceName: !Sub "${AWS::StackName}-ecs-service"
       TaskDefinition: !Ref EcsTask  
       DeploymentConfiguration:
         MaximumPercent: 100
@@ -418,7 +418,7 @@ Resources:
                   ]
               })
       Description: Sets Route 53 DNS Record for Factorio
-      FunctionName: factorio-set-dns
+      FunctionName: !Sub "${AWS::StackName}-set-dns"
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt SetDNSRecordLambdaRole.Arn
@@ -437,11 +437,11 @@ Resources:
         detail:
           AutoScalingGroupName:
           - !Ref AutoScalingGroup
-      Name: Factorio-Instance-Launch
+      Name: !Sub "${AWS::StackName}-instance-launch"
       State: ENABLED
       Targets:
         - Arn: !GetAtt SetDNSRecordLambda.Arn
-          Id: factorio-set-dns
+          Id: !Sub "${AWS::StackName}-set-dns"
 
   LaunchEventLambdaPermission:
     Type: AWS::Lambda::Permission
