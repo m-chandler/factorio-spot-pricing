@@ -31,7 +31,7 @@ Parameters:
     Default: "0.05"
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String
     Description: (Optional - An empty value disables this feature)
     Default: ''
 
@@ -85,11 +85,11 @@ Metadata:
       ServerState:
         default: "Update this parameter to shut down / start up your Factorio server as required to save on cost. Takes a few minutes to take effect."
       InstanceType:
-        default: "Which instance type?"
+        default: "Which instance type? You must make sure this is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
       SpotPrice:
         default: "Maximum spot price per hour? Leave blank to disable spot pricing."
       KeyPairName:
-        default: "If you wish to access the instance via SSH, select a Key Pair to use."
+        default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIp:
         default: "If you wish to access the instance via SSH, provide your public IP address."
       HostedZoneId:
