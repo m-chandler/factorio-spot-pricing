@@ -127,7 +127,7 @@ It may be because the `m3.medium` instance is not available in your region. As a
 
 In the below example (Paris), `m5.large` looks like a good option. Try to create the CloudFormation stack again, changing the InstanceType CloudFormation parameter to `m5.large`. See: https://github.com/m-chandler/factorio-spot-pricing/issues/10
 
-![Spot pricing history](readme-spot-pricing.jpg?raw=true).
+![Spot pricing history](readme-spot-pricing.jpg?raw=true)
 
 ### Basic Docker Debugging
 
