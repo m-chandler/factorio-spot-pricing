@@ -121,6 +121,14 @@ Be sure to check out factoriotools's repositories on Docker Hub and GitHub. Unle
 - Docker Hub: https://hub.docker.com/r/factoriotools/factorio/
 - GitHub: https://github.com/factoriotools/factorio-docker
 
+### Stack gets stuck on CREATE_IN_PROGRESS
+
+It may be because the `m3.medium` instance is not available in your region. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing History, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
+
+In the below example (Paris), `m5.large` looks like a good option. Try to create the CloudFormation stack again, changing the InstanceType CloudFormation parameter to `m5.large`. See: https://github.com/m-chandler/factorio-spot-pricing/issues/10
+
+![Spot pricing history](readme-spot-pricing.jpg?raw=true).
+
 ### Basic Docker Debugging
 
 If you SSH onto the server, you can run the following commands for debugging purposes:
