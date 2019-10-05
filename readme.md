@@ -93,7 +93,7 @@ You can force a redeployment of the service via ECS. [Update the service](https:
 
 **How can I change map settings, server settings etc.** 
 
-You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container using the following command: `sudo docker restart $(docker ps -q --filter name=ecs-factorio)`.
+You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container using the following command: `sudo docker restart $(docker ps -q --filter ancestor=factoriotools/factorio)`.
 
 **I can no longer connect to my instance via SSH?** 
 
@@ -120,6 +120,13 @@ Be sure to check out factoriotools's repositories on Docker Hub and GitHub. Unle
 
 - Docker Hub: https://hub.docker.com/r/factoriotools/factorio/
 - GitHub: https://github.com/factoriotools/factorio-docker
+
+### Basic Docker Debugging
+
+If you SSH onto the server, you can run the following commands for debugging purposes:
+
+* `sudo docker restart $(docker ps -q --filter ancestor=factoriotools/factorio)` - Restart server.
+* `sudo docker logs $(docker ps -q --filter ancestor=factoriotools/factorio)` - Check Factorio container logs.
 
 ## Thanks
 
