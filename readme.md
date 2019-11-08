@@ -129,12 +129,23 @@ In the below example (Paris), `m5.large` looks like a good option. Try to create
 
 ![Spot pricing history](readme-spot-pricing.jpg?raw=true)
 
+### Restarting the Container
+
+Visit the ECS dashboard in the AWS Console.
+1. Clusters
+2. Click on the factorio Cluster
+3. Tick the factorio Service, click Update
+4. Tick the "Force new deployment" option
+5. Click Next step (three times)
+7. Click Update Service
+
 ### Basic Docker Debugging
 
 If you SSH onto the server, you can run the following commands for debugging purposes:
 
-* `sudo docker restart $(docker ps -q --filter ancestor=factoriotools/factorio)` - Restart server.
 * `sudo docker logs $(docker ps -q --filter ancestor=factoriotools/factorio)` - Check Factorio container logs.
+
+DO NOT restart the Factorio docker container via SSH method. This will cause ECS to restart the container *again*. Refer to restarting to container above.
 
 ## Thanks
 
