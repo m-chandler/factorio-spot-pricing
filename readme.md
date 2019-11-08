@@ -145,7 +145,7 @@ If you SSH onto the server, you can run the following commands for debugging pur
 
 * `sudo docker logs $(docker ps -q --filter ancestor=factoriotools/factorio)` - Check Factorio container logs.
 
-DO NOT restart the Factorio docker container via SSH method. This will cause ECS to restart the container *again*. Refer to restarting to container above.
+DO NOT restart the Factorio docker container via SSH. This will cause ECS to lose track of the container, and effectively kill the restarted container and create a new one. Refer to restarting to container above for the right method.
 
 ## Thanks
 
