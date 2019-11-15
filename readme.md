@@ -93,15 +93,35 @@ You can force a redeployment of the service via ECS. [Update the service](https:
 
 **How can I change map settings, server settings etc.** 
 
-You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container using the following command: `sudo docker restart $(docker ps -q --filter ancestor=factoriotools/factorio)`.
+You'll need to have remote access to the server (refer to Optional Features). You can make whatever changes you want to the configuration in `/opt/factorio/config`. Once done, restart the container:
+
+1. Go to ECS (Elastic Container Service) in the AWS Console
+2. Click the factorio cluster
+3. Tick the factorio service, and select update
+4. Tick "Force new deployment"
+5. Click Next 3 times, and finally Update service
 
 **I can no longer connect to my instance via SSH?** 
 
 Your public IP address has probably changed. [Check your public IP address]((https://whatismyipaddress.com/)) and update the stack, providing your new public IP address.
 
+**How do I load an existing save?** 
+
+Be advised that whenever the Factorio container is terminated, it creates a new autosave just prior to terminating. For this reason, restarting the container directly on the host via SSH isn't advised.
+
+In order to load an existing save, follow the below steps:
+
+1. Go to ECS (Elastic Container Service) in the AWS Console
+2. Click the factorio cluster
+3. Tick the factorio service, and select update
+4. Set Number of tasks to 0
+5. Click Next 3 times, and finally Update service
+6. Access the instance via SSH, placing your save in /opt/factorio/saves.
+7. Repeat steps above, setting the Number of tasks to 1.
+
 ## What's Missing / Not Supported?
 
-* Scenarios.
+* Scenarios - you can probably figure out a way to get this working... I've just never tried :-).
 
 ## Expected Costs
 
