@@ -14,7 +14,7 @@ Parameters:
 
   ServerState:
     Type: String
-    Description: "Running: A spot instance will launch shortly after setting this parameter. Stopped: Your spot instance will be terminated shortly after setting this parameter."
+    Description: "Running: A spot instance will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
     Default: Running
     AllowedValues: 
     - Running
@@ -110,10 +110,9 @@ Conditions:
 Mappings:
   ServerState:
     Running:
-      AutoScalingCapacity: 1
+      DesiredCapacity: 1
     Stopped:
-      AutoScalingCapacity: 0
-    
+      DesiredCapacity: 0
 
 Resources:
 
@@ -276,10 +275,10 @@ Resources:
     - MountB
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
-      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       LaunchConfigurationName: !Ref LaunchConfiguration
-      MaxSize: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
-      MinSize: !FindInMap [ ServerState, !Ref ServerState, AutoScalingCapacity ]
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       VPCZoneIdentifier:
         - !Ref SubnetA
         - !Ref SubnetB
@@ -322,7 +321,7 @@ Resources:
     Type: AWS::ECS::Service
     Properties: 
       Cluster: !Ref EcsCluster
-      DesiredCount: 1
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       ServiceName: !Sub "${AWS::StackName}-ecs-service"
       TaskDefinition: !Ref EcsTask  
       DeploymentConfiguration:
