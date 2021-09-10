@@ -115,7 +115,6 @@ Conditions:
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
-  DoUpdateModsOnStart: !Equals [ !Ref UpdateModsOnStart, 'true' ]
 
 Mappings:
   ServerState:
@@ -362,7 +361,7 @@ Resources:
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
-            Value: !Sub "${DoUpdateModsOnStart}"
+            Value: !Sub "${UpdateModsOnStart}"
 
   # ====================================================
   # SET DNS RECORD
