@@ -58,6 +58,14 @@ Parameters:
     - true
     - false
 
+  UpdateModsOnStart:
+    Type: String
+    Description: Refer to https://hub.docker.com/r/factoriotools/factorio/ for further configuration details.
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -69,6 +77,7 @@ Metadata:
         - InstanceType
         - SpotPrice
         - EnableRcon
+        - UpdateModsOnStart
       - Label: 
           default: Remote Access (SSH) Configuration (Optional)
         Parameters:
@@ -98,14 +107,15 @@ Metadata:
         default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply a record name here (e.g. factorio.mydomain.com)."
       EnableRcon:
         default: "Do you wish to enable RCON?"
-
+      UpdateModsOnStart:
+        default: "Do you wish to update your mods on container start"
 Conditions:
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
-
+  DoUpdateModsOnStart: !Equals [ !Ref UpdateModsOnStart, 'true' ]
 
 Mappings:
   ServerState:
@@ -335,7 +345,7 @@ Resources:
       - Host:
           SourcePath: /opt/factorio
         Name: factorio
-      ContainerDefinitions:      
+      ContainerDefinitions:
         - Name: factorio
           MemoryReservation: 1024
           Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
@@ -350,6 +360,9 @@ Resources:
           - ContainerPath: /factorio
             SourceVolume: factorio
             ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${DoUpdateModsOnStart}"
 
   # ====================================================
   # SET DNS RECORD
