@@ -44,6 +44,16 @@ If you know what you're doing, you might want to SSH onto the Linux instance to 
 
 Note that this assumes some familiarity with SSH. The Linux instance will have a user `ec2-user` which you may connect to via SSH. If you want to upload saves, it's easiest to upload them to `/home/ec2-user` via SCP as the `ec2-user` user (this is `ec2-user`'s home directory), and then `sudo mv` these files to the right location in the factorio installation via SSH.
 
+For example, here is how you copy your Save File to the running server:
+
+``` bash
+scp MySave.zip ec2-user@<my-domain-or-EC2-ip>:~/
+ssh ec2-user@<my-domain-or-EC2-ip>
+mv ~/MySave.zip /opt/factorio/saves
+```
+
+Then your save should be in place.
+
 For remote access, you'll need to:
 
 1. Create a [Key Pair](https://console.aws.amazon.com/ec2/v2/home#KeyPairs:sort=keyName) (Services > EC2 > Key Pairs). You'll need to use this to connect to the instance for additional setup.
