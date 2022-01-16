@@ -196,7 +196,11 @@ Resources:
 
   Efs:
     Type: AWS::EFS::FileSystem
-    Properties: {}
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
 
   MountA:
     Type: AWS::EFS::MountTarget
@@ -271,17 +275,10 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
-          yum install -y amazon-efs-utils
-          mkdir /opt/factorio
-          mount -t efs ${Efs}:/ /opt/factorio
-          chown 845:845 /opt/factorio
           echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config          
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-    - MountA
-    - MountB
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
@@ -339,11 +336,15 @@ Resources:
 
   EcsTask:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - MountA
+    - MountB
     Properties: 
       Volumes:
-      - Host:
-          SourcePath: /opt/factorio
-        Name: factorio
+      - Name: factorio
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs
+          TransitEncryption: ENABLED
       ContainerDefinitions:
         - Name: factorio
           MemoryReservation: 1024
