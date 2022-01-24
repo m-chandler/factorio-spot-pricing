@@ -49,7 +49,8 @@ For example, here is how you copy your Save File to the running server:
 ``` bash
 scp MySave.zip ec2-user@<my-domain-or-EC2-ip>:~/
 ssh ec2-user@<my-domain-or-EC2-ip>
-mv ~/MySave.zip /opt/factorio/saves
+sudo savedir=$(mount | grep nfs4 | cut -f3 -d ' ' | xargs -I {} echo "{}/saves")
+sudo mv ~/MySave.zip $savedir
 ```
 
 Then your save should be in place.
@@ -93,7 +94,7 @@ Update your CloudFormation stack. Change the server state parameter from "Runnin
 
 **I'm done with Factorio, how do I delete this server?** 
 
-Delete the CloudFormation stack. Done.
+Delete the CloudFormation stack.  Except for the EFS, Done.  The EFS is retained when the CloudFormation stack is deleted to preserve your saves, but can then be manually deleted.
 
 **How can I upgrade the Factorio version?** 
 
@@ -140,7 +141,7 @@ In order to load an existing save, follow the below steps:
 The two key components that will attract charges are:
 
 * **EC2** - If you're using spot pricing (and the m3.medium instance as per the default in the template), I doubt you would attract more than a cent an hour in fees for EC2. Even if you ran it 24 hours a day for a whole month, that's about 7 bucks.
-* **EFS** - Charged per Gigabyte stored per month (GB-Month). Varies based on region, but typically less than 50c per gigabyte. My EFS file system for Factorio is only about 100MB (incl. mods and 5 saves), so maybe 5 cents per month?
+* **EFS** - Charged per Gigabyte stored per month (GB-Month). Varies based on region, but typically less than 50c per gigabyte. My EFS file system for Factorio is only about 100MB (incl. mods and 5 saves), so maybe 5 cents per month?  To lower storage costs when not actively utilzied, items in EFS are automatically moved to Infrequent Access after 7 days and also moved back to Standard if subsequently accessed.
 
 AWS do charge for data egress (i.e. data being sent from your Factorio server to clients), but again this should be barely noticeable.
 
