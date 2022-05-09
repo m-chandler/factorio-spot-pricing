@@ -24,7 +24,7 @@
 #    See the documentation for each action used below for the recommended IAM policies for this IAM user,
 #    and best practices on handling the access key credentials.
 
-name: Deploy to Amazon ECS
+name: Change factorio state
 
 on:
   workflow_dispatch:
@@ -32,12 +32,27 @@ on:
       serverState:
         description: "Server State"
         required: true
+        type: choice
         options:
           - Running
           - Stopped
 
       ip:
         description: "Your current IP"
+
+      size:
+        description: "Instance size"
+        required: true
+        type: choise
+        options:
+          - t3.micro
+        default: t3.micro
+      
+      price:
+        description: "Instance price"
+        required: true
+        type: number
+        default: 0.0037
 
 env:
   AWS_REGION: eu-south-1
@@ -48,7 +63,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy
+    name: Make Factorio ${{ github.event.inputs.serverState }}
     runs-on: ubuntu-latest
     environment: production
 
@@ -75,8 +90,11 @@ jobs:
           parameter-overrides: >-
             FactorioImageTag=stable,
             ServerState=${{ github.event.inputs.serverState }},
-            InstanceType=t3.small,
-            SpotPrice=0.0073,
+            InstanceType=${{ github.event.inputs.size }},
+            SpotPrice=${{ github.event.inputs.price }},
             KeyPairName=factorio-admin-eu-south-1,
             YourIp=${{ github.event.inputs.ip }},
-            UpdateModsOnStart=true
+            UpdateModsOnStart=true,
+            ModPortalLogin=${{ secrets.MOD_PORTAL_LOGIN }},
+            ModPortalToken=${{ secrets.MOD_PORTAL_PWD }}
+

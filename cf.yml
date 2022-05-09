@@ -65,6 +65,14 @@ Parameters:
     AllowedValues:
     - true
     - false
+  
+  ModPortalLogin:
+    Type: String
+    Default: false
+
+  ModPortalToken:
+    Type: String
+    Default: false
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -124,6 +132,21 @@ Mappings:
       DesiredCapacity: 0
 
 Resources:
+  # ====================================================
+  # LOGS
+  # ====================================================
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
+  LogStream:
+    Type: AWS::Logs::LogStream
+    DependsOn:
+      - LogGroup
+    Properties: 
+      LogGroupName: !Ref LogGroup
+      LogStreamName: !Sub ${AWS::StackName}-log-stream
 
   # ====================================================
   # BASIC VPC
@@ -339,6 +362,7 @@ Resources:
     DependsOn:
     - MountA
     - MountB
+    - LogStream
     Properties: 
       Volumes:
       - Name: factorio
@@ -347,7 +371,7 @@ Resources:
           TransitEncryption: ENABLED
       ContainerDefinitions:
         - Name: factorio
-          MemoryReservation: 1024
+          MemoryReservation: 950
           Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
           PortMappings:
           - ContainerPort: 34197
@@ -360,9 +384,19 @@ Resources:
           - ContainerPath: /factorio
             SourceVolume: factorio
             ReadOnly: false
+          LogConfiguration:
+            LogDriver: "awslogs"
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: !Ref LogStream
           Environment:
           - Name: UPDATE_MODS_ON_START
             Value: !Sub "${UpdateModsOnStart}"
+          - Name: USERNAME
+            Value: !Sub "${ModPortalLogin}"
+          - Name: TOKEN
+            Value: !Sub "${ModPortalToken}"
 
   # ====================================================
   # SET DNS RECORD
