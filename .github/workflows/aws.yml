@@ -27,19 +27,21 @@
 name: Deploy to Amazon ECS
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
+    inputs:
+      serverState:
+        description: "Server State"
+        required: true
+        options:
+          - Running
+          - Stopped
+
+      ip:
+        description: "Your current IP"
 
 env:
-  AWS_REGION: MY_AWS_REGION                   # set this to your preferred AWS region, e.g. us-west-1
-  ECR_REPOSITORY: MY_ECR_REPOSITORY           # set this to your Amazon ECR repository name
-  ECS_SERVICE: MY_ECS_SERVICE                 # set this to your Amazon ECS service name
-  ECS_CLUSTER: MY_ECS_CLUSTER                 # set this to your Amazon ECS cluster name
-  ECS_TASK_DEFINITION: MY_ECS_TASK_DEFINITION # set this to the path to your Amazon ECS task definition
-                                               # file, e.g. .aws/task-definition.json
-  CONTAINER_NAME: MY_CONTAINER_NAME           # set this to the name of the container in the
-                                               # containerDefinitions section of your task definition
+  AWS_REGION: eu-south-1
+  ECS_CLUSTER: factorio
 
 permissions:
   contents: read
@@ -51,45 +53,30 @@ jobs:
     environment: production
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build, tag, and push image to Amazon ECR
-      id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        # Build a docker container and
-        # push it to ECR so that it can
-        # be deployed to ECS.
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-    - name: Fill in the new image ID in the Amazon ECS task definition
-      id: task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: ${{ env.ECS_TASK_DEFINITION }}
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
-
-    - name: Deploy Amazon ECS task definition
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-      with:
-        task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: true
+      - name: Deploy to AWS CloudFormation
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: ${{ env.ECS_CLUSTER }}
+          template: cf.yml
+          parameter-overrides: >-
+            FactorioImageTag=stable,
+            ServerState=${{ github.event.inputs.serverState }},
+            InstanceType=t3.small,
+            SpotPrice=0.0073,
+            KeyPairName=factorio-admin-eu-south-1,
+            YourIp=${{ github.event.inputs.ip }},
+            UpdateModsOnStart=true
