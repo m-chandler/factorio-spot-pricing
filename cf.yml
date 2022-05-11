@@ -303,8 +303,10 @@ Resources:
             SpotInstanceType: one-time
             MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
             InstanceInterruptionBehavior: terminate
+        CreditSpecification:
+          CpuCredits: standard
         IamInstanceProfile:
-          Arn: !Ref InstanceProfile
+          Arn: !GetAtt InstanceProfile.Arn
         NetworkInterfaces:
           - DeviceIndex: 0
             AssociatePublicIpAddress: true
