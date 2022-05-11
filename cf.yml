@@ -298,11 +298,11 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash -xe
             echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config 
-      InstanceMarketOptions:
-        SpotInstanceType: one-time
-        MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-        InstanceInterruptionBehavior: terminate
-      IamInstanceProfile: !Ref InstanceProfile
+        InstanceMarketOptions:
+          SpotInstanceType: one-time
+          MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
+          InstanceInterruptionBehavior: terminate
+        IamInstanceProfile: !Ref InstanceProfile
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
