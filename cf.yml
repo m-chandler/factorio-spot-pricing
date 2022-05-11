@@ -285,6 +285,8 @@ Resources:
   
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+    - Ec2Sg
     Properties:
       LaunchTemplateData:
         SecurityGroupIds:
@@ -311,6 +313,8 @@ Resources:
           - DeviceIndex: 0
             AssociatePublicIpAddress: true
             DeleteOnTermination: true
+            Groups:
+              - !Ref Ec2Sg
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
