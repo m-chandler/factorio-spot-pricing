@@ -298,13 +298,17 @@ Resources:
             #!/bin/bash -xe
             echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config 
         InstanceMarketOptions:
-          SpotInstanceType: one-time
-          MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-          InstanceInterruptionBehavior: terminate
-        IamInstanceProfile: !Ref InstanceProfile
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: one-time
+            MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
+            InstanceInterruptionBehavior: terminate
+        IamInstanceProfile:
+          Arn: !Ref InstanceProfile
         NetworkInterfaces:
           - DeviceIndex: 0
             AssociatePublicIpAddress: true
+            DeleteOnTermination: true
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
