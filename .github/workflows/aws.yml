@@ -29,6 +29,10 @@ name: Change factorio state
 on:
   workflow_dispatch:
     inputs:
+      stackName:
+        description: "Name of your stack"
+        default: factorio
+
       serverState:
         description: "Server State"
         required: true
@@ -56,7 +60,7 @@ on:
 
 env:
   AWS_REGION: eu-south-1
-  ECS_CLUSTER: factorio
+  ECS_CLUSTER: ${{ github.event.inputs.stackName }}
 
 permissions:
   contents: read
