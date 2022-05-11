@@ -317,7 +317,9 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
-      LaunchTemplateId: !Ref LaunchTemplate
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MaxSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       VPCZoneIdentifier:
