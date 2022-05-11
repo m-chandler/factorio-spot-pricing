@@ -282,30 +282,34 @@ Resources:
           CidrIp: 0.0.0.0/0
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
-
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
+      LaunchTemplateData:
+        SecurityGroupIds:
+        - !Ref Ec2Sg
+        AssociatePublicIpAddress: true
+        InstanceInitiatedShutdownBehavior: terminate
+        KeyName: !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        ImageId: !Ref ECSAMI
+        InstanceType: !Ref InstanceType
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config 
+      InstanceMarketOptions:
+        SpotInstanceType: one-time
+        MaxPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
+        InstanceInterruptionBehavior: terminate
       IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName: 
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config          
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplateId: !Ref LaunchTemplate
       MaxSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       VPCZoneIdentifier:
