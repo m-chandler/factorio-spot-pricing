@@ -434,7 +434,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt SetDNSRecordLambdaRole.Arn
-      Runtime: python3.7
+      Runtime: python3.12
       Timeout: 20
 
   LaunchEvent:
