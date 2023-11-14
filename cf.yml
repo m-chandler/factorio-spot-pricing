@@ -154,8 +154,8 @@ Resources:
 
   Vpc: 
     Type: AWS::EC2::VPC
-    Properties: 
-      CidrBlock: 10.100.0.0/26
+    Properties:
+      AssignGeneratedIpv6CidrBlock: true
       EnableDnsSupport: true
       EnableDnsHostnames: true
 
@@ -166,9 +166,9 @@ Resources:
       - 0
       - !GetAZs 
         Ref: 'AWS::Region'
-      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
-      VpcId: !Ref Vpc
-      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Ipv6CidrBlock: !Select [ 0, !Cidr [ !GetAtt 'Vpc.Ipv6CidrBlock', 8, 64 ] ]
+      VpcId: !Ref Vpc  
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -189,7 +189,8 @@ Resources:
       - 1
       - !GetAZs 
         Ref: 'AWS::Region'
-      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      AssignIpv6AddressOnCreation: true
+      Ipv6CidrBlock: !Select [ 0, !Cidr [ !GetAtt 'Vpc.Ipv6CidrBlock', 8, 64 ] ]
       VpcId: !Ref Vpc
       MapPublicIpOnLaunch: true
 
@@ -208,12 +209,13 @@ Resources:
     Properties: 
       VpcId: !Ref Vpc    
 
-  Route:
+  Ipv6Route:
     Type: AWS::EC2::Route
     Properties: 
-      DestinationCidrBlock: 0.0.0.0/0
+      DestinationIpv6CidrBlock: "::/0"
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref RouteTable
+
 
   # ====================================================
   # EFS FOR PERSISTENT DATA
@@ -275,14 +277,13 @@ Resources:
       - FromPort: 34197
         ToPort: 34197
         IpProtocol: udp
-        CidrIp: 0.0.0.0/0
+        CidrIpv6: "::/0"
       - !If
         - DoEnableRcon
         - FromPort: 27015
           ToPort: 27015
           IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
-        - !Ref 'AWS::NoValue'
+          CidrIpv6: "::/0"
       VpcId: !Ref Vpc
 
   LaunchTemplate:
@@ -453,6 +454,7 @@ Resources:
           import os
           def handler(event, context):
             new_instance = boto3.resource('ec2').Instance(event['detail']['EC2InstanceId'])
+            ipv6_address = instance.network_interfaces_attribute[0]['Ipv6Addresses'][0]['Ipv6Address']
             boto3.client('route53').change_resource_record_sets(
               HostedZoneId= os.environ['HostedZoneId'],
               ChangeBatch={
@@ -462,11 +464,11 @@ Resources:
                           'Action': 'UPSERT',
                           'ResourceRecordSet': {
                               'Name': os.environ['RecordName'],
-                              'Type': 'A',
+                              'Type': 'AAAA',
                               'TTL': 60,
                               'ResourceRecords': [
                                   {
-                                      'Value': new_instance.public_ip_address
+                                      'Value': ipv6_address
                                   },
                               ]
                           }
