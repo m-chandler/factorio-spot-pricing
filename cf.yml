@@ -5,7 +5,7 @@ Parameters:
   ECSAMI:
     Description: AWS ECS AMI ID
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id
 
   FactorioImageTag:
     Type: String
@@ -155,19 +155,27 @@ Resources:
   Vpc: 
     Type: AWS::EC2::VPC
     Properties:
-      AssignGeneratedIpv6CidrBlock: true
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      CidrBlock: 10.100.0.0/26
+
+  IPv6CidrBlock:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      AmazonProvidedIpv6CidrBlock: true
+      VpcId: !Ref Vpc
 
   SubnetA:
     Type: AWS::EC2::Subnet
+    DependsOn: IPv6CidrBlock
     Properties:
       AvailabilityZone: !Select 
       - 0
       - !GetAZs 
         Ref: 'AWS::Region'
       AssignIpv6AddressOnCreation: true
-      Ipv6CidrBlock: !Select [ 0, !Cidr [ !GetAtt 'Vpc.Ipv6CidrBlock', 8, 64 ] ]
+      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      Ipv6CidrBlock: !Select [ 0, !Cidr [ !Select [ 0, !GetAtt Vpc.Ipv6CidrBlocks], 4, 64 ]]
       VpcId: !Ref Vpc  
 
   SubnetARoute:
@@ -184,13 +192,15 @@ Resources:
 
   SubnetB:
     Type: AWS::EC2::Subnet
+    DependsOn: IPv6CidrBlock
     Properties:
       AvailabilityZone: !Select 
       - 1
       - !GetAZs 
         Ref: 'AWS::Region'
       AssignIpv6AddressOnCreation: true
-      Ipv6CidrBlock: !Select [ 0, !Cidr [ !GetAtt 'Vpc.Ipv6CidrBlock', 8, 64 ] ]
+      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      Ipv6CidrBlock: !Select [ 1, !Cidr [ !Select [ 0, !GetAtt Vpc.Ipv6CidrBlocks], 4, 64 ]]
       VpcId: !Ref Vpc
       MapPublicIpOnLaunch: true
 
@@ -208,6 +218,13 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties: 
       VpcId: !Ref Vpc    
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
 
   Ipv6Route:
     Type: AWS::EC2::Route
@@ -277,13 +294,14 @@ Resources:
       - FromPort: 34197
         ToPort: 34197
         IpProtocol: udp
-        CidrIpv6: "::/0"
+        CidrIpv6: ::/0
       - !If
         - DoEnableRcon
         - FromPort: 27015
           ToPort: 27015
           IpProtocol: tcp
-          CidrIpv6: "::/0"
+          CidrIpv6: ::/0
+        - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
   LaunchTemplate:
@@ -454,7 +472,7 @@ Resources:
           import os
           def handler(event, context):
             new_instance = boto3.resource('ec2').Instance(event['detail']['EC2InstanceId'])
-            ipv6_address = instance.network_interfaces_attribute[0]['Ipv6Addresses'][0]['Ipv6Address']
+            ipv6_address = new_instance.network_interfaces_attribute[0]['Ipv6Addresses'][0]['Ipv6Address']
             boto3.client('route53').change_resource_record_sets(
               HostedZoneId= os.environ['HostedZoneId'],
               ChangeBatch={
