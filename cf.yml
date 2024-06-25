@@ -363,6 +363,12 @@ Resources:
           Environment:
           - Name: UPDATE_MODS_ON_START
             Value: !Sub "${UpdateModsOnStart}"
+          - Name: GENERATE_NEW_SAVE
+            Value: false
+          - Name: SAVE_NAME
+            Value: ChukkappaAndSimeon
+          - Name: LOAD_LATEST_SAVE
+            Value: false
 
   # ====================================================
   # SET DNS RECORD
