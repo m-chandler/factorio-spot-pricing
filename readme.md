@@ -44,23 +44,46 @@ If you know what you're doing, you might want to SSH onto the Linux instance to 
 
 Note that this assumes some familiarity with SSH. The Linux instance will have a user `ec2-user` which you may connect to via SSH. If you want to upload saves, it's easiest to upload them to `/home/ec2-user` via SCP as the `ec2-user` user (this is `ec2-user`'s home directory), and then `sudo mv` these files to the right location in the factorio installation via SSH.
 
-For example, here is how you copy your Save File to the running server:
-
-``` bash
-scp MySave.zip ec2-user@<my-domain-or-EC2-ip>:~/
-ssh ec2-user@<my-domain-or-EC2-ip>
-sudo savedir=$(mount | grep nfs4 | cut -f3 -d ' ' | xargs -I {} echo "{}/saves")
-sudo mv ~/MySave.zip $savedir
-```
-
-Then your save should be in place.
-
 For remote access, you'll need to:
 
 1. Create a [Key Pair](https://console.aws.amazon.com/ec2/v2/home#KeyPairs:sort=keyName) (Services > EC2 > Key Pairs). You'll need to use this to connect to the instance for additional setup.
 2. [Find your public IP address]((https://whatismyipaddress.com/)). You'll need this to connect to the instance for additional setup.
 
 If you're creating a new Factorio deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters.
+
+#### Uploading an existing save.
+
+This procedure involves uploading your new save and then force killing the docker container. When the container is force killed it won't auto save, and the default logic is that on restart, the latest save will be loaded. To do this you must have SSH enabled via the CloudFormation deployment. The container must be running, otherwise you can't access EFS (where the save resides) from the EC2 instance. 
+
+1. From your computer, upload your save to the EC2 instance.
+`scp MySave.zip ec2-user@<my-domain-or-EC2-ip>:~/`
+
+2. SSH into the EC2 instance.
+`ssh ec2-user@<my-domain-or-EC2-ip>`
+
+3. Identify the first 3 digits of the factorio docker container ID. We're doing this in advance, as we need to be quick in later steps.
+`docker ps`
+
+Output will look something like this. The container ID is 19d3e1743e5c, so just note down 19d for future use.
+```
+CONTAINER ID   IMAGE                            COMMAND                  CREATED          STATUS                    PORTS                                                                                          NAMES
+19d3e1743e5c   factoriotools/factorio:stable    "/docker-entrypoint.…"   2 minutes ago    Up 2 minutes              0.0.0.0:27015->27015/tcp, :::27015->27015/tcp, 0.0.0.0:34197->34197/udp, :::34197->34197/udp   ecs-factorio-EcsTask-i4J15601Hvkr-1-factorio-f6e3809ad5d6d8848501
+01c68c702f42   amazon/amazon-ecs-agent:latest   "/agent"                 27 minutes ago   Up 26 minutes (healthy)                                                                                                  ecs-agent
+```	
+
+4. Find the save directory with the below command.
+`savedir=$(mount | grep nfs4 | cut -f3 -d ' ' | xargs -I {} echo "{}/saves")`
+
+5. Move your uploaded save to the right location.
+`sudo mv ~/MySave.zip $savedir`
+
+6. Touch your save to ensure it's timestamp is the latest out of all saves. If you take too long between this step and the next (and the server auto-saves), it will instead load the auto save. If this happens you got very unlucky... just try again.
+`touch $savedir/MySave.zip`
+
+7. Force kill the factorio docker container. It must be killed and not stopped, otherwise it will auto-save and load that save on restart. Use part of the container ID we noted before.
+`docker kill 19d`
+
+8. That should be it. Wait 30s for the container to restart, and when you connect it should load the save you just uploaded.
 
 ### Custom Domain Name
 
