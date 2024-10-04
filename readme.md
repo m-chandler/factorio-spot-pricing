@@ -115,6 +115,45 @@ Update your CloudFormation stack. Enter a different limit.
 
 Update your CloudFormation stack. Change the server state parameter from "Running" to "Stopped".
 
+**How do I turn my stack on and off from the terminal?**
+
+You can write a bash script, using the CLI like so:
+
+``` bash
+#!/bin/bash
+
+update_stack() {
+    local state=$1
+    aws cloudformation update-stack \
+        --stack-name factorio-2024 \
+        --use-previous-template \
+        --parameters ParameterKey=ServerState,ParameterValue=$state \
+        --capabilities CAPABILITY_IAM \
+        --profile AdministratorAccess-111111111111
+}
+
+case "$1" in
+    start)
+        update_stack "Running"
+        ;;
+    stop)
+        update_stack "Stopped"
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+```
+
+If you put that in a file called `update_factorio.bash` then you could run:
+
+``` bash
+$ bash update_factorio.bash <start|stop>
+```
+
+That does require that you run `aws configure sso` first and set up an IAM account with all the right perms.
+
 **I'm done with Factorio, how do I delete this server?** 
 
 Delete the CloudFormation stack.  Except for the EFS, Done.  The EFS is retained when the CloudFormation stack is deleted to preserve your saves, but can then be manually deleted.
