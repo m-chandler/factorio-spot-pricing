@@ -30,6 +30,10 @@ A few notes on the services we're using...
 2. Ensure you've selected a suitable AWS Region (closest to you) via the selector at the top right.
 3. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. You'll need a Key Pair and your Public IP address if you want to access the instance remotely via SSH (recommended). Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
 
+## On Demand vs Spot
+
+You may switch between On Demand / Spot via the InstancePurchaseMode CloudFormation parameter. When using Spot, it is not necessary to specifcy an InstanceType. Simply adjust the SpotMinMemoryMiB and SpotMinVCPUCount to specify how much Memory and CPU you would like on your instance. AWS will find you the cheapest spot instance available (under the SpotPrice that you have specified). Should you wish to use a specific instance, you can specify it via the InstanceType parameter. If you are using On Demand, you must specify the InstanceType.
+
 ## Next Steps
 
 All things going well, your Factorio server should be running in five minutes or so. Wait until CloudFormation reports the stack status as `CREATE_COMPLETE`. Go to the [EC2 dashboard in the AWS console](https://console.aws.amazon.com/ec2/v2/home?#Instances:sort=instanceId) and you should see a Factorio server running. Take note of the public IP address. You should be able to fire up Factorio, and join via this IP address. No need to provide a port number, we're using Factorio's default. *Bonus points* - Public IP addresses are ugly. Refer to Custom Domain Name within Optional Features for a better solution. 
