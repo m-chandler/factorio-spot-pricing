@@ -144,7 +144,8 @@ Resources:
       - !GetAZs 
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
-      VpcId: !Ref Vpc  
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -167,6 +168,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -260,29 +262,41 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName: 
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config          
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg
+        KeyName: 
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config 
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity: 
+            !If [ SpotPriceProvided, 0, 100 ]
+          SpotAllocationStrategy: price-capacity-optimized
+          SpotMaxPrice:
+            !If [ SpotPriceProvided, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:            
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+          Overrides:
+           - InstanceType: !Ref InstanceType
       MaxSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       VPCZoneIdentifier:
