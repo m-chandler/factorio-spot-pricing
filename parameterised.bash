@@ -307,6 +307,9 @@ cat <<PARAM_BLOCK
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "\${AWS::StackName}-fs-${i}"
 
   Mount${i}A:
     Type: AWS::EFS::MountTarget

@@ -335,6 +335,9 @@ Resources:
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-1"
 
   Mount1A:
     Type: AWS::EFS::MountTarget
@@ -480,6 +483,9 @@ Resources:
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-2"
 
   Mount2A:
     Type: AWS::EFS::MountTarget
@@ -625,6 +631,9 @@ Resources:
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-3"
 
   Mount3A:
     Type: AWS::EFS::MountTarget
@@ -770,6 +779,9 @@ Resources:
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-4"
 
   Mount4A:
     Type: AWS::EFS::MountTarget
@@ -915,6 +927,9 @@ Resources:
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-5"
 
   Mount5A:
     Type: AWS::EFS::MountTarget
