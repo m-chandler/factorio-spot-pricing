@@ -1080,8 +1080,6 @@ Metadata:
           default: Essential Configuration
         Parameters:
         - FactorioImageTag
-        - ServerState1
-        - ServerState2
         - InstanceType
         - SpotPrice
         - EnableRcon
