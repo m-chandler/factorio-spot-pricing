@@ -5,5 +5,6 @@ do
   echo "Generating to ${SERVER_DIR}"
   mkdir -p "${SERVER_DIR}"
   bash parameterised.bash ${i} > "${SERVER_DIR}/cf.yml"
+  bash factorio-script.bash ${i} > "${SERVER_DIR}/update-factorio-servers.bash"
   echo "Generated $i!"
 done
