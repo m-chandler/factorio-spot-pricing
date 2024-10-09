@@ -811,7 +811,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-1"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -959,7 +959,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-2"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1107,7 +1107,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-3"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1255,7 +1255,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-4"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1403,7 +1403,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-5"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1551,7 +1551,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-6"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1699,7 +1699,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-7"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1847,7 +1847,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-8"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -1995,7 +1995,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-9"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2143,7 +2143,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-10"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2291,7 +2291,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-11"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2439,7 +2439,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-12"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2587,7 +2587,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-13"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2735,7 +2735,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-14"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -2883,7 +2883,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-15"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -3031,7 +3031,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-16"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -3179,7 +3179,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-17"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -3327,7 +3327,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-18"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -3475,7 +3475,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-19"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
@@ -3623,7 +3623,7 @@ Resources:
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-20"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START

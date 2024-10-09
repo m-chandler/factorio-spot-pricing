@@ -438,7 +438,7 @@ cat <<PARAM_BLOCK
             Protocol: tcp
           MountPoints:
           - ContainerPath: /factorio
-            SourceVolume: factorio
+            SourceVolume: !Sub "\${AWS::StackName}-factorio-${i}"
             ReadOnly: false
           Environment:
           - Name: UPDATE_MODS_ON_START
