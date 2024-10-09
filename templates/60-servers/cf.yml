@@ -1477,9 +1477,7 @@ Conditions:
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
-  DnsConfigEnabled: !And
-  - !Not [!Equals [!Ref HostedZoneId, '']]
-
+  DnsConfigEnabled: !Not [ !Equals [ !Ref HostedZoneId, '' ] ]
 
 Mappings:
   ServerState:

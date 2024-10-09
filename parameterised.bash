@@ -159,13 +159,14 @@ Conditions:
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
+  DnsConfigEnabled: !Not [ !Equals [ !Ref HostedZoneId, '' ] ]
 CONDITIONS_START
 
-# Generate the condition
-condition="  DnsConfigEnabled: !And\n"
-condition+="  - !Not [!Equals [!Ref HostedZoneId, '']]\n"
-
 # You can't have more than 20 conditions in an or block
+# Generate the condition
+# condition="  DnsConfigEnabled: !And\n"
+# condition+="  - !Not [!Equals [!Ref HostedZoneId, '']]\n"
+
 # condition+="  - !Or\n"
 
 # for i in $(seq 1 $SERVERS); do
@@ -173,7 +174,7 @@ condition+="  - !Not [!Equals [!Ref HostedZoneId, '']]\n"
 # done
 
 # Output the condition
-echo -e "$condition"
+# echo -e "$condition"
 
 cat <<MAPPINGS_SECTION
 
