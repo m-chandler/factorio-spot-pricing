@@ -164,11 +164,13 @@ CONDITIONS_START
 # Generate the condition
 condition="  DnsConfigEnabled: !And\n"
 condition+="  - !Not [!Equals [!Ref HostedZoneId, '']]\n"
-condition+="  - !Or\n"
 
-for i in $(seq 1 $SERVERS); do
-    condition+="    - !Not [!Equals [!Ref RecordName$i, '']]\n"
-done
+# You can't have more than 20 conditions in an or block
+# condition+="  - !Or\n"
+
+# for i in $(seq 1 $SERVERS); do
+#     condition+="    - !Not [!Equals [!Ref RecordName$i, '']]\n"
+# done
 
 # Output the condition
 echo -e "$condition"

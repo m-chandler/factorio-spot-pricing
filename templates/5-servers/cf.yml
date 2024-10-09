@@ -214,12 +214,6 @@ Conditions:
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
   DnsConfigEnabled: !And
   - !Not [!Equals [!Ref HostedZoneId, '']]
-  - !Or
-    - !Not [!Equals [!Ref RecordName1, '']]
-    - !Not [!Equals [!Ref RecordName2, '']]
-    - !Not [!Equals [!Ref RecordName3, '']]
-    - !Not [!Equals [!Ref RecordName4, '']]
-    - !Not [!Equals [!Ref RecordName5, '']]
 
 
 Mappings:
