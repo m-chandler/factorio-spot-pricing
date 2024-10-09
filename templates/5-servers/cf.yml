@@ -1147,7 +1147,7 @@ Resources:
                   ]
               })
       Description: Sets Route 53 DNS Record based on ASG name
-      FunctionName: !Sub "-set-dns"
+      FunctionName: !Sub "${AWS::StackName}-set-dns"
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt SetDNSRecordLambdaRole.Arn
@@ -1170,11 +1170,11 @@ Resources:
           - !Ref AutoScalingGroup3
           - !Ref AutoScalingGroup4
           - !Ref AutoScalingGroup5
-      Name: !Sub "-instance-launch"
+      Name: !Sub "${AWS::StackName}-instance-launch"
       State: ENABLED
       Targets:
         - Arn: !GetAtt SetDNSRecordLambda.Arn
-          Id: !Sub "-set-dns"
+          Id: !Sub "${AWS::StackName}-set-dns"
 
   LaunchEventLambdaPermission:
     Type: AWS::Lambda::Permission
