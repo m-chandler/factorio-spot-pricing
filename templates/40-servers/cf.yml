@@ -1049,7 +1049,17 @@ Resources:
       - 0
       - !GetAZs
         Ref: 'AWS::Region'
-      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
+      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
+      VpcId: !Ref Vpc
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+      - 1
+      - !GetAZs
+        Ref: 'AWS::Region'
+      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
       VpcId: !Ref Vpc
 
   SubnetARoute:
@@ -1063,16 +1073,6 @@ Resources:
     Properties:
       RouteTableId: !Ref RouteTable
       SubnetId: !Ref SubnetB
-
-  SubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select
-      - 1
-      - !GetAZs
-        Ref: 'AWS::Region'
-      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
-      VpcId: !Ref Vpc
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
