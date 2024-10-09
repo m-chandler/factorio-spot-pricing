@@ -1081,6 +1081,11 @@ Resources:
       CidrBlock: 10.100.0.0/26
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - [!Ref 'AWS::StackName', 'vpc']
 
   SubnetA:
     Type: AWS::EC2::Subnet
