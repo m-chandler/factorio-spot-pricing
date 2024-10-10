@@ -401,7 +401,7 @@ cat <<PARAM_BLOCK
   EcsCluster${i}:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${AWS::StackName}-cluster-${i}"
+      ClusterName: !Sub "\${AWS::StackName}-cluster-${i}"
 
   EcsService${i}:
     Type: AWS::ECS::Service
