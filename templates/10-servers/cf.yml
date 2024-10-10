@@ -544,7 +544,7 @@ Resources:
   EcsCluster1:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-1"
+      ClusterName: !Sub "${AWS::StackName}-cluster-1"
 
   EcsService1:
     Type: AWS::ECS::Service
@@ -692,7 +692,7 @@ Resources:
   EcsCluster2:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-2"
+      ClusterName: !Sub "${AWS::StackName}-cluster-2"
 
   EcsService2:
     Type: AWS::ECS::Service
@@ -840,7 +840,7 @@ Resources:
   EcsCluster3:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-3"
+      ClusterName: !Sub "${AWS::StackName}-cluster-3"
 
   EcsService3:
     Type: AWS::ECS::Service
@@ -988,7 +988,7 @@ Resources:
   EcsCluster4:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-4"
+      ClusterName: !Sub "${AWS::StackName}-cluster-4"
 
   EcsService4:
     Type: AWS::ECS::Service
@@ -1136,7 +1136,7 @@ Resources:
   EcsCluster5:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-5"
+      ClusterName: !Sub "${AWS::StackName}-cluster-5"
 
   EcsService5:
     Type: AWS::ECS::Service
@@ -1284,7 +1284,7 @@ Resources:
   EcsCluster6:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-6"
+      ClusterName: !Sub "${AWS::StackName}-cluster-6"
 
   EcsService6:
     Type: AWS::ECS::Service
@@ -1432,7 +1432,7 @@ Resources:
   EcsCluster7:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-7"
+      ClusterName: !Sub "${AWS::StackName}-cluster-7"
 
   EcsService7:
     Type: AWS::ECS::Service
@@ -1580,7 +1580,7 @@ Resources:
   EcsCluster8:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-8"
+      ClusterName: !Sub "${AWS::StackName}-cluster-8"
 
   EcsService8:
     Type: AWS::ECS::Service
@@ -1728,7 +1728,7 @@ Resources:
   EcsCluster9:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-9"
+      ClusterName: !Sub "${AWS::StackName}-cluster-9"
 
   EcsService9:
     Type: AWS::ECS::Service
@@ -1876,7 +1876,7 @@ Resources:
   EcsCluster10:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "-cluster-10"
+      ClusterName: !Sub "${AWS::StackName}-cluster-10"
 
   EcsService10:
     Type: AWS::ECS::Service
