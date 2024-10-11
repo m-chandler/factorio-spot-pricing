@@ -396,6 +396,13 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 100
         MinimumHealthyPercent: 0
+      NetworkConfiguration:
+        AwsvpcConfiguration: 
+          AssignPublicIp: ENABLED
+          SecurityGroups: 
+            - !Ref Ec2Sg
+          Subnets: 
+            - !Ref SubnetA
 
   EcsTask:
     Type: AWS::ECS::TaskDefinition
@@ -403,6 +410,7 @@ Resources:
     - MountA
     - MountB
     Properties: 
+      NetworkMode: awsvpc
       Volumes:
       - Name: factorio
         EFSVolumeConfiguration:
