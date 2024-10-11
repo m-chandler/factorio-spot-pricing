@@ -398,11 +398,12 @@ Resources:
         MinimumHealthyPercent: 0
       NetworkConfiguration:
         AwsvpcConfiguration: 
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups: 
             - !Ref Ec2Sg
           Subnets: 
             - !Ref SubnetA
+            - !Ref SubnetB
 
   EcsTask:
     Type: AWS::ECS::TaskDefinition
