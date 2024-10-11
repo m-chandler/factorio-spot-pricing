@@ -15,15 +15,33 @@ Parameters:
     Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/factoriotools/factorio/)"
     Default: latest
 
+  InstancePurchaseMode:
+    Type: String
+    Description: "Spot: Much cheaper, but your instance might restart during gameplay with a few minutes of unsaved gameplay lost. On Demand: Instance will be created in on-demand mode. More expensive, but your gameplay is unlikely to be interrupted by the server going down."
+    Default: "Spot"
+    AllowedValues:
+    - "On Demand"
+    - "Spot"
+
   InstanceType:
     Type: String
-    Description: "m6a.large is a good cost effective instance, 2 VCPU and 8 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
-    Default: m6a.large
+    Description: "Spot: While m6a.large is a good instance type, you should leave this blank to get the best value instance for the provided specs. Override at your discretion: https://aws.amazon.com/ec2/instance-types/. On Demand: You must specify this. "
+    Default: ""
 
   SpotPrice:
     Type: String
-    Description: "An m3.medium shouldn't cost more than a cent per hour. Note: Leave this blank to use on-demand pricing."
+    Description: "Spot: the max cents/hr to pay for spot instance. On Demand: Ignored"
     Default: "0.05"
+
+  SpotMinMemoryMiB:
+    Type: Number
+    Description: "Spot: the minimum desired memory for your instance. On Demand: Ignored"
+    Default: 2048
+
+  SpotMinVCpuCount:
+    Type: Number
+    Description: "Spot: the minimum desired VCPUs for your instance. On Demand: Ignored"
+    Default: 2
 
   KeyPairName:
     Type: String
@@ -89,8 +107,6 @@ Metadata:
           default: Essential Configuration
         Parameters:
         - FactorioImageTag
-        - InstanceType
-        - SpotPrice
         - EnableRcon
         - UpdateModsOnStart
 METADATA_START
@@ -103,6 +119,14 @@ ESSENTIAL_PARAMS
 done
 
 cat <<METADATA_MID_1
+      - Label:
+          default: Instance Configuration
+        Parameters:
+        - InstancePurchaseMode
+        - InstanceType
+        - SpotPrice
+        - SpotMinMemoryMiB
+        - SpotMinVCpuCount
       - Label:
           default: Remote Access (SSH) Configuration (Optional)
         Parameters:
@@ -127,8 +151,6 @@ cat <<PARAMETER_LABELS_START
         default: "Which version of Factorio do you want to launch?"
       InstanceType:
         default: "Which instance type? You must make sure this is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
-      SpotPrice:
-        default: "Maximum spot price per hour? Leave blank to disable spot pricing."
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIp:
@@ -155,9 +177,10 @@ cat <<CONDITIONS_START
 Conditions:
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
-  SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
   DnsConfigEnabled: !Not [ !Equals [ !Ref HostedZoneId, '' ] ]
+  UsingSpotInstance: !Equals [ !Ref InstancePurchaseMode, 'Spot' ]
+  InstanceTypeProvided: !Not [ !Equals [ !Ref InstanceType, '' ] ]
 CONDITIONS_START
 
 # You can't have more than 20 conditions in an or block
@@ -213,6 +236,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetB:
     Type: AWS::EC2::Subnet
@@ -223,6 +247,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -369,29 +394,48 @@ cat <<PARAM_BLOCK
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration${i}:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate${i}:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg${i}
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=\${EcsCluster${i}} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub \${AWS::StackName}-launch-template-${i}
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg${i}
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=\${EcsCluster${i}} >> /etc/ecs/ecs.config
 
   AutoScalingGroup${i}:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "\${AWS::StackName}-asg-${i}"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState${i}, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration${i}
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate${i}
+            Version: !GetAtt LaunchTemplate${i}.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState${i}, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState${i}, DesiredCapacity ]
       VPCZoneIdentifier:

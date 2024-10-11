@@ -12,15 +12,33 @@ Parameters:
     Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/factoriotools/factorio/)"
     Default: latest
 
+  InstancePurchaseMode:
+    Type: String
+    Description: "Spot: Much cheaper, but your instance might restart during gameplay with a few minutes of unsaved gameplay lost. On Demand: Instance will be created in on-demand mode. More expensive, but your gameplay is unlikely to be interrupted by the server going down."
+    Default: "Spot"
+    AllowedValues:
+    - "On Demand"
+    - "Spot"
+
   InstanceType:
     Type: String
-    Description: "m6a.large is a good cost effective instance, 2 VCPU and 8 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
-    Default: m6a.large
+    Description: "Spot: While m6a.large is a good instance type, you should leave this blank to get the best value instance for the provided specs. Override at your discretion: https://aws.amazon.com/ec2/instance-types/. On Demand: You must specify this. "
+    Default: ""
 
   SpotPrice:
     Type: String
-    Description: "An m3.medium shouldn't cost more than a cent per hour. Note: Leave this blank to use on-demand pricing."
+    Description: "Spot: the max cents/hr to pay for spot instance. On Demand: Ignored"
     Default: "0.05"
+
+  SpotMinMemoryMiB:
+    Type: Number
+    Description: "Spot: the minimum desired memory for your instance. On Demand: Ignored"
+    Default: 2048
+
+  SpotMinVCpuCount:
+    Type: Number
+    Description: "Spot: the minimum desired VCPUs for your instance. On Demand: Ignored"
+    Default: 2
 
   KeyPairName:
     Type: String
@@ -400,8 +418,6 @@ Metadata:
           default: Essential Configuration
         Parameters:
         - FactorioImageTag
-        - InstanceType
-        - SpotPrice
         - EnableRcon
         - UpdateModsOnStart
         - ServerState1
@@ -424,6 +440,14 @@ Metadata:
         - ServerState18
         - ServerState19
         - ServerState20
+      - Label:
+          default: Instance Configuration
+        Parameters:
+        - InstancePurchaseMode
+        - InstanceType
+        - SpotPrice
+        - SpotMinMemoryMiB
+        - SpotMinVCpuCount
       - Label:
           default: Remote Access (SSH) Configuration (Optional)
         Parameters:
@@ -458,8 +482,6 @@ Metadata:
         default: "Which version of Factorio do you want to launch?"
       InstanceType:
         default: "Which instance type? You must make sure this is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
-      SpotPrice:
-        default: "Maximum spot price per hour? Leave blank to disable spot pricing."
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIp:
@@ -553,9 +575,10 @@ Metadata:
 Conditions:
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
-  SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
   DnsConfigEnabled: !Not [ !Equals [ !Ref HostedZoneId, '' ] ]
+  UsingSpotInstance: !Equals [ !Ref InstancePurchaseMode, 'Spot' ]
+  InstanceTypeProvided: !Not [ !Equals [ !Ref InstanceType, '' ] ]
 
 Mappings:
   ServerState:
@@ -591,6 +614,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetB:
     Type: AWS::EC2::Subnet
@@ -601,6 +625,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -742,29 +767,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration1:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate1:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg1
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster1} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-1
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg1
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster1} >> /etc/ecs/ecs.config
 
   AutoScalingGroup1:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-1"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration1
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate1
+            Version: !GetAtt LaunchTemplate1.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -890,29 +934,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration2:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate2:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg2
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster2} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-2
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg2
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster2} >> /etc/ecs/ecs.config
 
   AutoScalingGroup2:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-2"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration2
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate2
+            Version: !GetAtt LaunchTemplate2.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1038,29 +1101,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration3:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate3:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg3
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster3} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-3
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg3
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster3} >> /etc/ecs/ecs.config
 
   AutoScalingGroup3:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-3"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration3
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate3
+            Version: !GetAtt LaunchTemplate3.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1186,29 +1268,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration4:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate4:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg4
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster4} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-4
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg4
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster4} >> /etc/ecs/ecs.config
 
   AutoScalingGroup4:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-4"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration4
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate4
+            Version: !GetAtt LaunchTemplate4.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1334,29 +1435,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration5:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate5:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg5
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster5} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-5
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg5
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster5} >> /etc/ecs/ecs.config
 
   AutoScalingGroup5:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-5"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration5
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate5
+            Version: !GetAtt LaunchTemplate5.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1482,29 +1602,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration6:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate6:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg6
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster6} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-6
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg6
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster6} >> /etc/ecs/ecs.config
 
   AutoScalingGroup6:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-6"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration6
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate6
+            Version: !GetAtt LaunchTemplate6.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1630,29 +1769,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration7:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate7:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg7
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster7} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-7
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg7
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster7} >> /etc/ecs/ecs.config
 
   AutoScalingGroup7:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-7"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration7
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate7
+            Version: !GetAtt LaunchTemplate7.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1778,29 +1936,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration8:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate8:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg8
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster8} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-8
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg8
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster8} >> /etc/ecs/ecs.config
 
   AutoScalingGroup8:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-8"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration8
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate8
+            Version: !GetAtt LaunchTemplate8.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -1926,29 +2103,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration9:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate9:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg9
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster9} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-9
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg9
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster9} >> /etc/ecs/ecs.config
 
   AutoScalingGroup9:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-9"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration9
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate9
+            Version: !GetAtt LaunchTemplate9.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2074,29 +2270,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration10:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate10:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg10
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster10} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-10
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg10
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster10} >> /etc/ecs/ecs.config
 
   AutoScalingGroup10:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-10"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration10
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate10
+            Version: !GetAtt LaunchTemplate10.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2222,29 +2437,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration11:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate11:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg11
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster11} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-11
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg11
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster11} >> /etc/ecs/ecs.config
 
   AutoScalingGroup11:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-11"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState11, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration11
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate11
+            Version: !GetAtt LaunchTemplate11.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState11, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState11, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2370,29 +2604,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration12:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate12:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg12
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster12} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-12
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg12
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster12} >> /etc/ecs/ecs.config
 
   AutoScalingGroup12:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-12"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState12, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration12
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate12
+            Version: !GetAtt LaunchTemplate12.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState12, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState12, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2518,29 +2771,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration13:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate13:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg13
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster13} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-13
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg13
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster13} >> /etc/ecs/ecs.config
 
   AutoScalingGroup13:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-13"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState13, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration13
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate13
+            Version: !GetAtt LaunchTemplate13.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState13, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState13, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2666,29 +2938,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration14:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate14:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg14
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster14} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-14
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg14
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster14} >> /etc/ecs/ecs.config
 
   AutoScalingGroup14:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-14"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState14, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration14
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate14
+            Version: !GetAtt LaunchTemplate14.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState14, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState14, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2814,29 +3105,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration15:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate15:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg15
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster15} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-15
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg15
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster15} >> /etc/ecs/ecs.config
 
   AutoScalingGroup15:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-15"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState15, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration15
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate15
+            Version: !GetAtt LaunchTemplate15.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState15, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState15, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -2962,29 +3272,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration16:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate16:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg16
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster16} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-16
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg16
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster16} >> /etc/ecs/ecs.config
 
   AutoScalingGroup16:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-16"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState16, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration16
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate16
+            Version: !GetAtt LaunchTemplate16.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState16, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState16, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -3110,29 +3439,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration17:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate17:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg17
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster17} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-17
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg17
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster17} >> /etc/ecs/ecs.config
 
   AutoScalingGroup17:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-17"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState17, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration17
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate17
+            Version: !GetAtt LaunchTemplate17.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState17, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState17, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -3258,29 +3606,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration18:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate18:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg18
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster18} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-18
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg18
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster18} >> /etc/ecs/ecs.config
 
   AutoScalingGroup18:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-18"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState18, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration18
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate18
+            Version: !GetAtt LaunchTemplate18.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState18, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState18, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -3406,29 +3773,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration19:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate19:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg19
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster19} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-19
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg19
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster19} >> /etc/ecs/ecs.config
 
   AutoScalingGroup19:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-19"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState19, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration19
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate19
+            Version: !GetAtt LaunchTemplate19.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState19, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState19, DesiredCapacity ]
       VPCZoneIdentifier:
@@ -3554,29 +3940,48 @@ Resources:
         - !Ref 'AWS::NoValue'
       VpcId: !Ref Vpc
 
-  LaunchConfiguration20:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate20:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName:
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg20
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster20} >> /etc/ecs/ecs.config
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-20
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg20
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster20} >> /etc/ecs/ecs.config
 
   AutoScalingGroup20:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg-20"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState20, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration20
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate20
+            Version: !GetAtt LaunchTemplate20.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
       MaxSize: !FindInMap [ ServerState, !Ref ServerState20, DesiredCapacity ]
       MinSize: !FindInMap [ ServerState, !Ref ServerState20, DesiredCapacity ]
       VPCZoneIdentifier:

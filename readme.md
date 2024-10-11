@@ -1,6 +1,6 @@
-# Complete Factorio Server Deployment (CloudFormation)
+# Complete Factorio Server Fleet Deployment (CloudFormation)
 
-The template contained within this repository can be used to deploy a Factorio server to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", the server should cost less than a cent an hour to run, and you can even turn it off when you and your friends aren't playing - saving even more money.
+The templates contained within this repository can be used to deploy one or more Factorio servers to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", each server should cost less than USD$0.03 an hour to run, and you can even turn each server off individually when you and your friends aren't playing - saving even more money.
 
 ## Prerequisites
 
@@ -14,15 +14,28 @@ The solution builds upon the [factoriotools/factorio](https://hub.docker.com/r/f
 
 In a nutshell, the CloudFormation template launches an _ephemeral_ instance which joins itself to an Elastic Container Service (ECS) Cluster. Within this ECS Cluster, an ECS Service is configured to run a Factorio Docker image. The ephemeral instance does not store any saves, mods, Factorio config, data etc. - all of this state is stored on a network file system (Elastic File System - EFS).
 
-The CloudFormation template is configured to launch this ephemeral instance using spot pricing. What is spot pricing you might ask? It's a way to save up to 90% on regular "on demand" pricing in AWS. There are drawbacks however. You're effectively participating in an auction to get a cheap instance. If demand increases and someone else puts in a higher bid than you, your instance will terminate in a matter of minutes. 
+The CloudFormation template is configured to launch one or more of these ephemeral instances using spot pricing. What is spot pricing you might ask? It's a way to save up to 90% on regular "on demand" pricing in AWS. There are drawbacks however. You're effectively participating in an auction to get a cheap instance. If demand increases and someone else puts in a higher bid than you, your instance will terminate in a matter of minutes. 
 
 A few notes on the services we're using...
 
 * **EFS** - Elastic File System is used to store Factorio config, save games, mods etc. None of this is stored on the server itself, as it may terminate at any time.
-* **Auto Scaling** - An Auto Scaling Group is used to maintain a single instance via spot pricing.
-* **VPC** - The template deploys a very basic VPC, purely for use by the Factorio server. This doesn't cost you a cent.
+* **Auto Scaling** - Each Auto Scaling Group is used to maintain a single factorio instance via spot pricing.
+* **VPC** - The template deploys a very basic VPC, purely for use by the Factorio servers. This doesn't cost you a cent.
 
 ## Getting Started
+
+## Multi Server (Recommended)
+
+Because you might like to start different games, or have one for friends and one for your personal use, we recommend that you spin up a single multi-server instance. After all, you only pay for what you use so setting up a 20-server stack and then only using one server will (currently) cost the same as a 1-server stack. For this example, we will setup the 20-server stack:
+
+1. Navigate to the CloudFormation Stack Creation screen: https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=factorio
+2. Ensure you've selected a suitable AWS Region (closest to you) via the selector at the top right.
+3. Select the "Upload a template file" option and select the `templates/20-servers/cf.yml` file from this repository (that you have downloaded to your machine). You may choose a larger or smaller number of servers if you wish.
+3. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. You'll need a Key Pair and your Public IP address if you want to access the instance remotely via SSH (recommended). Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
+
+Inside each of the servers directory you will find a bash script that makes it very easy to manage your factorio servers from the CLI (it will even automatically update the Public IP etc). We strongly recommend that you download that, log into the AWS CLI and use that script for further operations instead of labouring with the Cloud Formation CLI.
+
+## Single Server (Not Recommended)
 
 [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=factorio&templateURL=https://s3.amazonaws.com/factorio-spot-pricing/cf.yml)
 
@@ -56,6 +69,20 @@ For remote access, you'll need to:
 If you're creating a new Factorio deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters.
 
 #### Uploading an existing save.
+
+##### Automated Method (Recommended)
+
+If you wish to upload your save file, just use the bash script at `util/upload-save.bash` AFTER your particular server is up and running and reporting green in ECS and EC2.
+
+It should be as simple as:
+
+```bash
+bash upload-save.bash path_to_MySave.zip ec2_address
+```
+
+The ec2_address will either be the IP address of your instance or the RouteName of your server if you have set one up.
+
+##### Manual Method (Obsolete)
 
 This procedure involves uploading your new save and then force killing the docker container. When the container is force killed it won't auto save, and the default logic is that on restart, the latest save will be loaded. To do this you must have SSH enabled via the CloudFormation deployment. The container must be running, otherwise you can't access EFS (where the save resides) from the EC2 instance. 
 
