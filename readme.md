@@ -4,7 +4,7 @@ The template contained within this repository can be used to deploy a Factorio s
 
 ## Prerequisites
 
-1. A basic understanding of Amazon Web Services, specifically CloudFormation.
+1. A basic understanding of Amazon Web Services.
 2. An AWS Account.
 3. Basic knowledge of Linux administration (no more than what would be required to just use the `factoriotools/factorio` Docker image).
 
@@ -32,7 +32,7 @@ A few notes on the services we're using...
 
 ## On Demand vs Spot
 
-You may switch between On Demand / Spot via the InstancePurchaseMode CloudFormation parameter. When using Spot, it is not necessary to specifcy an InstanceType. Simply adjust the SpotMinMemoryMiB and SpotMinVCPUCount to specify how much Memory and CPU you would like on your instance. AWS will find you the cheapest spot instance available (under the SpotPrice that you have specified). Should you wish to use a specific instance, you can specify it via the InstanceType parameter. If you are using On Demand, you must specify the InstanceType.
+You may switch between On Demand / Spot via the InstancePurchaseMode CloudFormation parameter. When using Spot, it is not necessary to specify an InstanceType. Simply adjust the SpotMinMemoryMiB and SpotMinVCPUCount to specify how much Memory and CPU you would like on your instance. AWS will find you the cheapest spot instance available below the SpotPrice that you have specified. Should you wish to use a specific instance, you can specify it via the InstanceType parameter. If you are using "On Demand", you *must* specify the InstanceType.
 
 ## Next Steps
 
@@ -44,7 +44,7 @@ At this point you should *really* configure remote access as per the below secti
 
 ### Remote Access
 
-If you know what you're doing, you might want to SSH onto the Linux instance to see what's going on / debug / make improvements. You might also want to do this to upload your existing save. For security, SSH should be locked down to a known IP address (i.e. you), preventing malicious users from trying to break in (or worse - succeeeding). You'll need to create a Key Pair in AWS, find your public IP address, and then provide both of the parameters in the Remote Access (SSH) Configuration (Optional) section.
+You will likely want to SSH onto the Linux instance to make server changes / add a game password. You might also want to do this to upload your existing save. For security, SSH should be locked down to a known IP address (i.e. you), preventing malicious users from trying to break in. You'll need to create a Key Pair in AWS, find your public IP address, and then provide both of the parameters in the Remote Access (SSH) Configuration (Optional) section.
 
 Note that this assumes some familiarity with SSH. The Linux instance will have a user `ec2-user` which you may connect to via SSH. If you want to upload saves, it's easiest to upload them to `/home/ec2-user` via SCP as the `ec2-user` user (this is `ec2-user`'s home directory), and then `sudo mv` these files to the right location in the factorio installation via SSH.
 
@@ -222,11 +222,18 @@ Be sure to check out factoriotools's repositories on Docker Hub and GitHub. Unle
 
 ### Stack gets stuck on CREATE_IN_PROGRESS
 
-It may be because the `m3.medium` instance is not available in your region. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing History, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
+There might be multiple reasons.
+
+#### Selected Instance Type not available in your region
+
+NOTE: This should no longer be an issue when using the SpotMinMemoryMiB and SpotMinVCPUCount parameters instead of InstanceType.
+
+It may be because there are no suitable Instance Types available in your region. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing History, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
 
 In the below example (Paris), `m5.large` looks like a good option. Try to create the CloudFormation stack again, changing the InstanceType CloudFormation parameter to `m5.large`. See: https://github.com/m-chandler/factorio-spot-pricing/issues/10
 
 ![Spot pricing history](readme-spot-pricing.jpg?raw=true)
+
 
 ### Restarting the Container
 
@@ -246,6 +253,14 @@ If you SSH onto the server, you can run the following commands for debugging pur
 
 DO NOT restart the Factorio docker container via SSH. This will cause ECS to lose track of the container, and effectively kill the restarted container and create a new one. Refer to Restarting the Container above for the right method.
 
+## Changelog
+
+06-Oct-2024
+  * Migrate from Launch Configuration to Launch Template, as Launch Configuration is unavailable in AWS accounts created after 01-Oct-2024.
+  * Remove requirement for user to specify an instance type, but rather specify the Memory and vCPU that they require. AWS will figure out the best instance type.
+
 ## Thanks
 
 Thanks goes out to [FactorioTools](https://github.com/factoriotools) ([and contributors](https://github.com/factoriotools/factorio-docker/graphs/contributors)) for maintaining the Factorio Docker images.
+
+Thank you to all who have contributed to this repository.
