@@ -1,6 +1,6 @@
 TEMPLATE_DIR="${PWD}/templates"
 
-bash factorio-script.bash ${i} > "${TEMPLATE_DIR}/1-server/update-factorio-servers.bash"
+bash src/factorio-script.bash ${i} > "${TEMPLATE_DIR}/1-server/update-factorio-servers.bash"
 
 for i in 5 10 15 20 40 60
 do
