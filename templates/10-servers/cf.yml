@@ -1,0 +1,2266 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Factorio Spot Price Servers () via Docker / ECS
+Parameters:
+
+  ECSAMI:
+    Description: AWS ECS AMI ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+
+  FactorioImageTag:
+    Type: String
+    Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/factoriotools/factorio/)"
+    Default: latest
+
+  InstancePurchaseMode:
+    Type: String
+    Description: "Spot: Much cheaper, but your instance might restart during gameplay with a few minutes of unsaved gameplay lost. On Demand: Instance will be created in on-demand mode. More expensive, but your gameplay is unlikely to be interrupted by the server going down."
+    Default: "Spot"
+    AllowedValues:
+    - "On Demand"
+    - "Spot"
+
+  InstanceType:
+    Type: String
+    Description: "Spot: While m6a.large is a good instance type, you should leave this blank to get the best value instance for the provided specs. Override at your discretion: https://aws.amazon.com/ec2/instance-types/. On Demand: You must specify this. "
+    Default: ""
+
+  SpotPrice:
+    Type: String
+    Description: "Spot: the max cents/hr to pay for spot instance. On Demand: Ignored"
+    Default: "0.05"
+
+  SpotMinMemoryMiB:
+    Type: Number
+    Description: "Spot: the minimum desired memory for your instance. On Demand: Ignored"
+    Default: 2048
+
+  SpotMinVCpuCount:
+    Type: Number
+    Description: "Spot: the minimum desired VCPUs for your instance. On Demand: Ignored"
+    Default: 2
+
+  KeyPairName:
+    Type: String
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  YourIp:
+    Type: String
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  HostedZoneId:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply the hosted zone ID here.
+    Default: ''
+
+  EnableRcon:
+    Type: String
+    Description: Refer to https://hub.docker.com/r/factoriotools/factorio/ for further RCON configuration details. This parameter simply opens / closes the port on the security group.
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
+  UpdateModsOnStart:
+    Type: String
+    Description: Refer to https://hub.docker.com/r/factoriotools/factorio/ for further configuration details.
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
+  # ====================================================
+  # 1 - Server Specific Variables
+  # ====================================================
+
+  ServerState1:
+    Type: String
+    Description: "Running: A spot instance for Server 1 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName1:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 1 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 2 - Server Specific Variables
+  # ====================================================
+
+  ServerState2:
+    Type: String
+    Description: "Running: A spot instance for Server 2 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName2:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 2 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 3 - Server Specific Variables
+  # ====================================================
+
+  ServerState3:
+    Type: String
+    Description: "Running: A spot instance for Server 3 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName3:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 3 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 4 - Server Specific Variables
+  # ====================================================
+
+  ServerState4:
+    Type: String
+    Description: "Running: A spot instance for Server 4 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName4:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 4 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 5 - Server Specific Variables
+  # ====================================================
+
+  ServerState5:
+    Type: String
+    Description: "Running: A spot instance for Server 5 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName5:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 5 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 6 - Server Specific Variables
+  # ====================================================
+
+  ServerState6:
+    Type: String
+    Description: "Running: A spot instance for Server 6 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName6:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 6 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 7 - Server Specific Variables
+  # ====================================================
+
+  ServerState7:
+    Type: String
+    Description: "Running: A spot instance for Server 7 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName7:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 7 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 8 - Server Specific Variables
+  # ====================================================
+
+  ServerState8:
+    Type: String
+    Description: "Running: A spot instance for Server 8 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName8:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 8 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 9 - Server Specific Variables
+  # ====================================================
+
+  ServerState9:
+    Type: String
+    Description: "Running: A spot instance for Server 9 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName9:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 9 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+  # ====================================================
+  # 10 - Server Specific Variables
+  # ====================================================
+
+  ServerState10:
+    Type: String
+    Description: "Running: A spot instance for Server 10 will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
+    Default: Running
+    AllowedValues:
+    - Running
+    - Stopped
+
+  RecordName10:
+    Type: String
+    Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance for server 10 starts, supply the name of the record here (e.g. factorio.mydomain.com).
+    Default: ''
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Essential Configuration
+        Parameters:
+        - FactorioImageTag
+        - EnableRcon
+        - UpdateModsOnStart
+        - ServerState1
+        - ServerState2
+        - ServerState3
+        - ServerState4
+        - ServerState5
+        - ServerState6
+        - ServerState7
+        - ServerState8
+        - ServerState9
+        - ServerState10
+      - Label:
+          default: Instance Configuration
+        Parameters:
+        - InstancePurchaseMode
+        - InstanceType
+        - SpotPrice
+        - SpotMinMemoryMiB
+        - SpotMinVCpuCount
+      - Label:
+          default: Remote Access (SSH) Configuration (Optional)
+        Parameters:
+        - KeyPairName
+        - YourIp
+      - Label:
+          default: DNS Configuration (Optional)
+        Parameters:
+        - HostedZoneId
+        - RecordName1
+        - RecordName2
+        - RecordName3
+        - RecordName4
+        - RecordName5
+        - RecordName6
+        - RecordName7
+        - RecordName8
+        - RecordName9
+        - RecordName10
+    ParameterLabels:
+      FactorioImageTag:
+        default: "Which version of Factorio do you want to launch?"
+      InstanceType:
+        default: "Which instance type? You must make sure this is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
+      KeyPairName:
+        default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
+      YourIp:
+        default: "If you wish to access the instance via SSH, provide your public IP address."
+      HostedZoneId:
+        default: "If you have a hosted zone in Route 53 and wish to update a DNS record whenever your Factorio instance starts, supply the hosted zone ID here."
+      EnableRcon:
+        default: "Do you wish to enable RCON?"
+      UpdateModsOnStart:
+        default: "Do you wish to update your mods on container start"
+      ServerState1:
+        default: "Update this parameter to shut down / start up your Factorio server 1 as required to save on cost. Takes a few minutes to take effect."
+      RecordName1:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 1 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState2:
+        default: "Update this parameter to shut down / start up your Factorio server 2 as required to save on cost. Takes a few minutes to take effect."
+      RecordName2:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 2 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState3:
+        default: "Update this parameter to shut down / start up your Factorio server 3 as required to save on cost. Takes a few minutes to take effect."
+      RecordName3:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 3 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState4:
+        default: "Update this parameter to shut down / start up your Factorio server 4 as required to save on cost. Takes a few minutes to take effect."
+      RecordName4:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 4 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState5:
+        default: "Update this parameter to shut down / start up your Factorio server 5 as required to save on cost. Takes a few minutes to take effect."
+      RecordName5:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 5 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState6:
+        default: "Update this parameter to shut down / start up your Factorio server 6 as required to save on cost. Takes a few minutes to take effect."
+      RecordName6:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 6 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState7:
+        default: "Update this parameter to shut down / start up your Factorio server 7 as required to save on cost. Takes a few minutes to take effect."
+      RecordName7:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 7 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState8:
+        default: "Update this parameter to shut down / start up your Factorio server 8 as required to save on cost. Takes a few minutes to take effect."
+      RecordName8:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 8 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState9:
+        default: "Update this parameter to shut down / start up your Factorio server 9 as required to save on cost. Takes a few minutes to take effect."
+      RecordName9:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 9 starts, supply a record name here (e.g. factorio.mydomain.com)."
+      ServerState10:
+        default: "Update this parameter to shut down / start up your Factorio server 10 as required to save on cost. Takes a few minutes to take effect."
+      RecordName10:
+        default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance server 10 starts, supply a record name here (e.g. factorio.mydomain.com)."
+Conditions:
+  KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
+  IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
+  DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
+  DnsConfigEnabled: !Not [ !Equals [ !Ref HostedZoneId, '' ] ]
+  UsingSpotInstance: !Equals [ !Ref InstancePurchaseMode, 'Spot' ]
+  InstanceTypeProvided: !Not [ !Equals [ !Ref InstanceType, '' ] ]
+
+Mappings:
+  ServerState:
+    Running:
+      DesiredCapacity: 1
+    Stopped:
+      DesiredCapacity: 0
+
+Resources:
+
+  # ====================================================
+  # BASIC VPC
+  # ====================================================
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.100.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - [!Ref 'AWS::StackName', 'vpc']
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+      - 0
+      - !GetAZs
+        Ref: 'AWS::Region'
+      CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+      - 1
+      - !GetAZs
+        Ref: 'AWS::Region'
+      CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/24, 2, 7 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
+
+  SubnetARoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA
+
+  SubnetBRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetB
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: {}
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  # ====================================================
+  # Common Resources
+  # ====================================================
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "route53:*"
+                Resource: "*"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  # ====================================================
+  # 1 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs1:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-1"
+
+  Mount1A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs1
+      SecurityGroups:
+      - !Ref EfsSg1
+      SubnetId: !Ref SubnetA
+
+  Mount1B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs1
+      SecurityGroups:
+      - !Ref EfsSg1
+      SubnetId: !Ref SubnetB
+
+  EfsSg1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-1"
+      GroupDescription: !Sub "${AWS::StackName}-efs-1"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg1
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-1"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-1"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate1:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-1
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg1
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster1} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup1:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-1"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate1
+            Version: !GetAtt LaunchTemplate1.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster1:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-1"
+
+  EcsService1:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster1
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState1, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-1"
+      TaskDefinition: !Ref EcsTask1
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask1:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount1A
+    - Mount1B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-1"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs1
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-1"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 2 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs2:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-2"
+
+  Mount2A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs2
+      SecurityGroups:
+      - !Ref EfsSg2
+      SubnetId: !Ref SubnetA
+
+  Mount2B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs2
+      SecurityGroups:
+      - !Ref EfsSg2
+      SubnetId: !Ref SubnetB
+
+  EfsSg2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-2"
+      GroupDescription: !Sub "${AWS::StackName}-efs-2"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg2
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-2"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-2"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate2:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-2
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg2
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster2} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup2:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-2"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate2
+            Version: !GetAtt LaunchTemplate2.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster2:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-2"
+
+  EcsService2:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster2
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState2, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-2"
+      TaskDefinition: !Ref EcsTask2
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask2:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount2A
+    - Mount2B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-2"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs2
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-2"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 3 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs3:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-3"
+
+  Mount3A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs3
+      SecurityGroups:
+      - !Ref EfsSg3
+      SubnetId: !Ref SubnetA
+
+  Mount3B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs3
+      SecurityGroups:
+      - !Ref EfsSg3
+      SubnetId: !Ref SubnetB
+
+  EfsSg3:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-3"
+      GroupDescription: !Sub "${AWS::StackName}-efs-3"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg3
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg3:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-3"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-3"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate3:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-3
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg3
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster3} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup3:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-3"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate3
+            Version: !GetAtt LaunchTemplate3.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster3:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-3"
+
+  EcsService3:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster3
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState3, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-3"
+      TaskDefinition: !Ref EcsTask3
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask3:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount3A
+    - Mount3B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-3"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs3
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-3"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 4 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs4:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-4"
+
+  Mount4A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs4
+      SecurityGroups:
+      - !Ref EfsSg4
+      SubnetId: !Ref SubnetA
+
+  Mount4B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs4
+      SecurityGroups:
+      - !Ref EfsSg4
+      SubnetId: !Ref SubnetB
+
+  EfsSg4:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-4"
+      GroupDescription: !Sub "${AWS::StackName}-efs-4"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg4
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg4:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-4"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-4"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate4:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-4
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg4
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster4} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup4:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-4"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate4
+            Version: !GetAtt LaunchTemplate4.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster4:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-4"
+
+  EcsService4:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster4
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState4, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-4"
+      TaskDefinition: !Ref EcsTask4
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask4:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount4A
+    - Mount4B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-4"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs4
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-4"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 5 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs5:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-5"
+
+  Mount5A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs5
+      SecurityGroups:
+      - !Ref EfsSg5
+      SubnetId: !Ref SubnetA
+
+  Mount5B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs5
+      SecurityGroups:
+      - !Ref EfsSg5
+      SubnetId: !Ref SubnetB
+
+  EfsSg5:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-5"
+      GroupDescription: !Sub "${AWS::StackName}-efs-5"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg5
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg5:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-5"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-5"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate5:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-5
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg5
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster5} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup5:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-5"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate5
+            Version: !GetAtt LaunchTemplate5.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster5:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-5"
+
+  EcsService5:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster5
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState5, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-5"
+      TaskDefinition: !Ref EcsTask5
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask5:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount5A
+    - Mount5B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-5"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs5
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-5"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 6 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs6:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-6"
+
+  Mount6A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs6
+      SecurityGroups:
+      - !Ref EfsSg6
+      SubnetId: !Ref SubnetA
+
+  Mount6B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs6
+      SecurityGroups:
+      - !Ref EfsSg6
+      SubnetId: !Ref SubnetB
+
+  EfsSg6:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-6"
+      GroupDescription: !Sub "${AWS::StackName}-efs-6"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg6
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg6:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-6"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-6"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate6:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-6
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg6
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster6} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup6:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-6"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate6
+            Version: !GetAtt LaunchTemplate6.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster6:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-6"
+
+  EcsService6:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster6
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState6, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-6"
+      TaskDefinition: !Ref EcsTask6
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask6:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount6A
+    - Mount6B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-6"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs6
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-6"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 7 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs7:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-7"
+
+  Mount7A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs7
+      SecurityGroups:
+      - !Ref EfsSg7
+      SubnetId: !Ref SubnetA
+
+  Mount7B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs7
+      SecurityGroups:
+      - !Ref EfsSg7
+      SubnetId: !Ref SubnetB
+
+  EfsSg7:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-7"
+      GroupDescription: !Sub "${AWS::StackName}-efs-7"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg7
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg7:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-7"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-7"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate7:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-7
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg7
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster7} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup7:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-7"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate7
+            Version: !GetAtt LaunchTemplate7.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster7:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-7"
+
+  EcsService7:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster7
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState7, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-7"
+      TaskDefinition: !Ref EcsTask7
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask7:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount7A
+    - Mount7B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-7"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs7
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-7"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 8 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs8:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-8"
+
+  Mount8A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs8
+      SecurityGroups:
+      - !Ref EfsSg8
+      SubnetId: !Ref SubnetA
+
+  Mount8B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs8
+      SecurityGroups:
+      - !Ref EfsSg8
+      SubnetId: !Ref SubnetB
+
+  EfsSg8:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-8"
+      GroupDescription: !Sub "${AWS::StackName}-efs-8"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg8
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg8:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-8"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-8"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate8:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-8
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg8
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster8} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup8:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-8"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate8
+            Version: !GetAtt LaunchTemplate8.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster8:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-8"
+
+  EcsService8:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster8
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState8, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-8"
+      TaskDefinition: !Ref EcsTask8
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask8:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount8A
+    - Mount8B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-8"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs8
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-8"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 9 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs9:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-9"
+
+  Mount9A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs9
+      SecurityGroups:
+      - !Ref EfsSg9
+      SubnetId: !Ref SubnetA
+
+  Mount9B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs9
+      SecurityGroups:
+      - !Ref EfsSg9
+      SubnetId: !Ref SubnetB
+
+  EfsSg9:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-9"
+      GroupDescription: !Sub "${AWS::StackName}-efs-9"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg9
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg9:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-9"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-9"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate9:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-9
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg9
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster9} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup9:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-9"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate9
+            Version: !GetAtt LaunchTemplate9.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster9:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-9"
+
+  EcsService9:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster9
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState9, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-9"
+      TaskDefinition: !Ref EcsTask9
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask9:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount9A
+    - Mount9B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-9"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs9
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-9"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # 10 - EFS FOR PERSISTENT DATA
+  # ====================================================
+
+  Efs10:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    Properties:
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-fs-10"
+
+  Mount10A:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs10
+      SecurityGroups:
+      - !Ref EfsSg10
+      SubnetId: !Ref SubnetA
+
+  Mount10B:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref Efs10
+      SecurityGroups:
+      - !Ref EfsSg10
+      SubnetId: !Ref SubnetB
+
+  EfsSg10:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-efs-10"
+      GroupDescription: !Sub "${AWS::StackName}-efs-10"
+      SecurityGroupIngress:
+      - FromPort: 2049
+        ToPort: 2049
+        IpProtocol: tcp
+        SourceSecurityGroupId: !Ref Ec2Sg10
+      VpcId: !Ref Vpc
+
+  # ====================================================
+  # INSTANCE CONFIG - 10
+  # ====================================================
+
+  Ec2Sg10:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ec2-10"
+      GroupDescription: !Sub "${AWS::StackName}-ec2-10"
+      SecurityGroupIngress:
+      - !If
+        - IpAddressProvided
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIp: !Sub "${YourIp}/32"
+        - !Ref 'AWS::NoValue'
+      - FromPort: 34197
+        ToPort: 34197
+        IpProtocol: udp
+        CidrIp: 0.0.0.0/0
+      - !If
+        - DoEnableRcon
+        - FromPort: 27015
+          ToPort: 27015
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+        - !Ref 'AWS::NoValue'
+      VpcId: !Ref Vpc
+
+  LaunchTemplate10:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template-10
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        SecurityGroupIds:
+        - !Ref Ec2Sg10
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster10} >> /etc/ecs/ecs.config
+
+  AutoScalingGroup10:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-asg-10"
+      DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: lowest-price
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate10
+            Version: !GetAtt LaunchTemplate10.LatestVersionNumber
+          Overrides:
+           - Fn::If:
+             - InstanceTypeProvided
+             - InstanceType: !Ref InstanceType
+             - InstanceRequirements:
+                 MemoryMiB:
+                   Min: !Ref SpotMinMemoryMiB
+                 VCpuCount:
+                   Min: !Ref SpotMinVCpuCount
+      MaxSize: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
+      MinSize: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
+      VPCZoneIdentifier:
+        - !Ref SubnetA
+        - !Ref SubnetB
+
+  EcsCluster10:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster-10"
+
+  EcsService10:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster10
+      DesiredCount: !FindInMap [ ServerState, !Ref ServerState10, DesiredCapacity ]
+      ServiceName: !Sub "${AWS::StackName}-ecs-service-10"
+      TaskDefinition: !Ref EcsTask10
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+
+  EcsTask10:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+    - Mount10A
+    - Mount10B
+    Properties:
+      Volumes:
+      - Name: !Sub "${AWS::StackName}-factorio-10"
+        EFSVolumeConfiguration:
+          FilesystemId: !Ref Efs10
+          TransitEncryption: ENABLED
+      ContainerDefinitions:
+        - Name: factorio
+          MemoryReservation: 1024
+          Image: !Sub "factoriotools/factorio:${FactorioImageTag}"
+          PortMappings:
+          - ContainerPort: 34197
+            HostPort: 34197
+            Protocol: udp
+          - ContainerPort: 27015
+            HostPort: 27015
+            Protocol: tcp
+          MountPoints:
+          - ContainerPath: /factorio
+            SourceVolume: !Sub "${AWS::StackName}-factorio-10"
+            ReadOnly: false
+          Environment:
+          - Name: UPDATE_MODS_ON_START
+            Value: !Sub "${UpdateModsOnStart}"
+
+  # ====================================================
+  # SET DNS RECORD - For all ASGs and EC2 instances
+  # ====================================================
+
+  SetDNSRecordLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: DnsConfigEnabled
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "route53:*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action: "ec2:DescribeInstance*"
+                Resource: "*"
+
+  SetDNSRecordLambda:
+    Type: "AWS::Lambda::Function"
+    Condition: DnsConfigEnabled
+    Properties:
+      Environment:
+        Variables:
+          HostedZoneId: !Ref HostedZoneId
+          ASGRecordMap: !Join [",", [
+            !Sub "${AutoScalingGroup1}:${RecordName1}",
+            !Sub "${AutoScalingGroup2}:${RecordName2}",
+            !Sub "${AutoScalingGroup3}:${RecordName3}",
+            !Sub "${AutoScalingGroup4}:${RecordName4}",
+            !Sub "${AutoScalingGroup5}:${RecordName5}",
+            !Sub "${AutoScalingGroup6}:${RecordName6}",
+            !Sub "${AutoScalingGroup7}:${RecordName7}",
+            !Sub "${AutoScalingGroup8}:${RecordName8}",
+            !Sub "${AutoScalingGroup9}:${RecordName9}",
+            !Sub "${AutoScalingGroup10}:${RecordName10}",
+          ]]
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+            asg_name = event['detail']['AutoScalingGroupName']
+
+            # Parse the ASG to record name mapping
+            asg_record_map = dict(item.split(':') for item in os.environ['ASGRecordMap'].split(','))
+
+            # Get the record name for the current ASG
+            record_name = asg_record_map.get(asg_name)
+            if not record_name:
+              raise ValueError(f"No record name mapping found for ASG: {asg_name}")
+
+            new_instance = boto3.resource('ec2').Instance(event['detail']['EC2InstanceId'])
+            boto3.client('route53').change_resource_record_sets(
+              HostedZoneId= os.environ['HostedZoneId'],
+              ChangeBatch={
+                  'Comment': f'Updating DNS for {asg_name}',
+                  'Changes': [
+                      {
+                          'Action': 'UPSERT',
+                          'ResourceRecordSet': {
+                              'Name': record_name,
+                              'Type': 'A',
+                              'TTL': 60,
+                              'ResourceRecords': [
+                                  {
+                                      'Value': new_instance.public_ip_address
+                                  },
+                              ]
+                          }
+                      },
+                  ]
+              })
+      Description: Sets Route 53 DNS Record based on ASG name
+      FunctionName: !Sub "${AWS::StackName}-set-dns"
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt SetDNSRecordLambdaRole.Arn
+      Runtime: python3.12
+      Timeout: 20
+
+  LaunchEvent:
+    Type: AWS::Events::Rule
+    Condition: DnsConfigEnabled
+    Properties:
+      EventPattern:
+        source:
+        - aws.autoscaling
+        detail-type:
+        - EC2 Instance Launch Successful
+        detail:
+          AutoScalingGroupName:
+          - !Ref AutoScalingGroup1
+          - !Ref AutoScalingGroup2
+          - !Ref AutoScalingGroup3
+          - !Ref AutoScalingGroup4
+          - !Ref AutoScalingGroup5
+          - !Ref AutoScalingGroup6
+          - !Ref AutoScalingGroup7
+          - !Ref AutoScalingGroup8
+          - !Ref AutoScalingGroup9
+          - !Ref AutoScalingGroup10
+      Name: !Sub "${AWS::StackName}-instance-launch"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SetDNSRecordLambda.Arn
+          Id: !Sub "${AWS::StackName}-set-dns"
+
+  LaunchEventLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: DnsConfigEnabled
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SetDNSRecordLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LaunchEvent.Arn
