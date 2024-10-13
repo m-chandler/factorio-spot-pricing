@@ -55,7 +55,31 @@ For remote access, you'll need to:
 
 If you're creating a new Factorio deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters.
 
-#### Uploading an existing save.
+#### Uploading and Downloading an existing save.
+
+##### Fast save upload (Recommended)
+
+Warning: Makes sure that your server is live and all EC2 and ECS healthchecks are green before trying this.
+
+Use the automation in `util/upload-save.bash` to upload your save file to your server, like so:
+
+``` bash
+bash util/upload-save.bash ~/path/to/my/save.zip $your_ec2_ip_or_remote_name
+```
+
+This is just an automated implementation of the slower version below.
+
+##### Fast save download (Recommended)
+
+Use the automation in `util/download-latest-save.bash` to download the latest (most recently played) save from a factorio server:
+
+``` bash
+bash util/download-latest-save.bash $your_ec2_ip_or_remote_name
+```
+
+Your server needs to be running for this to work and it should download your latest save to your local directory.
+
+##### Manual upload process (for understanding the system)
 
 This procedure involves uploading your new save and then force killing the docker container. When the container is force killed it won't auto save, and the default logic is that on restart, the latest save will be loaded. To do this you must have SSH enabled via the CloudFormation deployment. The container must be running, otherwise you can't access EFS (where the save resides) from the EC2 instance. 
 
