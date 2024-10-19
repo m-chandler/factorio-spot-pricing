@@ -137,6 +137,24 @@ That's fine; update your CloudFormation stack and set the SpotPrice parameter to
 
 Update your CloudFormation stack. Enter a different instance type.
 
+**What is the best instance type to run Factorio**
+
+For the source of truth, we can look at the [minimum/recommended game settings](https://store.steampowered.com/app/645390/Factorio_Space_Age/) for Factorio which says: 
+
+* Processor Speed: 3Ghz+ minimum / 4Ghz+ recommended
+* Processor Cores: Quad Core
+* Memory: 8GB minimum / 16GB recommended
+
+Given that, we can use a handy tool, [like Cloud Price](https://cloudprice.net/aws/ec2?_ProcessorVCPUCount_min=2&_ProcessorVCPUCount_max=4&columns=InstanceType,InstanceFamily,ProcessorVCPUCount,MemorySizeInMB,ProcessorArchitecture,HasGPU,PricePerHour,ProcessorSustainedClockSpeedInGHz,__AlternativeInstances,__SavingsOptions,BestOnDemandHourPriceDiff&sortField=ProcessorSustainedClockSpeedInGHz&sortOrder=false&paymentType=Spot) to find us the cheapest instances that also meet these requirements and sort them by Clock Speed.
+
+At the time of writing this would indicate that the best instances are:
+
+* For Minimum Spec: m6a.large (2vCPUs, 8GB, 3.6Ghz) => USD$0.0317/hour spot
+* For Mid-Range Spec: m5zn.large (2vCPUs, 8GB, 4.5Ghz) => USD$0.0582/hour spot
+* For High-Range Spec: m5zn.xlarge (4vCPUs, 16GB, 4.5Ghz) => USD$0.1787/hour spot
+
+It is recommended that you start off on minimum spec and then, when you notice that you need more power, stop your server, swap instance type, and start again. This is one of the best benefits of factorio spot pricing, being able to get a better computer to run your game at a moment's notice.
+
 **How do I change my spot price limit?** 
 
 Update your CloudFormation stack. Enter a different limit. 
