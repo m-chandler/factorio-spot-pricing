@@ -16,7 +16,7 @@ Parameters:
     Type: String
     Description: "Running: A spot instance will launch shortly after setting this parameter; your Factorio server should start within 5-10 minutes of changing this parameter (once UPDATE_IN_PROGRESS becomes UPDATE_COMPLETE). Stopped: Your spot instance (and thus Factorio container) will be terminated shortly after setting this parameter."
     Default: Running
-    AllowedValues: 
+    AllowedValues:
     - Running
     - Stopped
 
@@ -24,9 +24,9 @@ Parameters:
     Type: String
     Description: "Spot: Much cheaper, but your instance might restart during gameplay with a few minutes of unsaved gameplay lost. On Demand: Instance will be created in on-demand mode. More expensive, but your gameplay is unlikely to be interrupted by the server going down."
     Default: "Spot"
-    AllowedValues:     
+    AllowedValues:
     - "On Demand"
-    - "Spot"    
+    - "Spot"
 
   InstanceType:
     Type: String
@@ -59,7 +59,7 @@ Parameters:
     Default: ''
 
   HostedZoneId:
-    Type: String
+    Type: AWS::Route53::HostedZone::Id
     Description: (Optional - An empty value disables this feature) If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Factorio instance starts, supply the hosted zone ID here.
     Default: ''
 
@@ -87,14 +87,14 @@ Parameters:
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label: 
+      - Label:
           default: Essential Configuration
         Parameters:
         - FactorioImageTag
         - ServerState
         - EnableRcon
         - UpdateModsOnStart
-      - Label: 
+      - Label:
           default: Instance Configuration
         Parameters:
         - InstancePurchaseMode
@@ -102,12 +102,12 @@ Metadata:
         - SpotPrice
         - SpotMinMemoryMiB
         - SpotMinVCpuCount
-      - Label: 
+      - Label:
           default: Remote Access (SSH) Configuration (Optional)
         Parameters:
         - KeyPairName
         - YourIp
-      - Label: 
+      - Label:
           default: DNS Configuration (Optional)
         Parameters:
         - HostedZoneId
@@ -152,9 +152,9 @@ Resources:
   # BASIC VPC
   # ====================================================
 
-  Vpc: 
+  Vpc:
     Type: AWS::EC2::VPC
-    Properties: 
+    Properties:
       CidrBlock: 10.100.0.0/26
       EnableDnsSupport: true
       EnableDnsHostnames: true
@@ -162,9 +162,9 @@ Resources:
   SubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select 
+      AvailabilityZone: !Select
       - 0
-      - !GetAZs 
+      - !GetAZs
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
       VpcId: !Ref Vpc
@@ -172,22 +172,22 @@ Resources:
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: 
+    Properties:
       RouteTableId: !Ref RouteTable
       SubnetId: !Ref SubnetA
 
   SubnetBRoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: 
+    Properties:
       RouteTableId: !Ref RouteTable
-      SubnetId: !Ref SubnetB  
+      SubnetId: !Ref SubnetB
 
   SubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select 
+      AvailabilityZone: !Select
       - 1
-      - !GetAZs 
+      - !GetAZs
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
       VpcId: !Ref Vpc
@@ -199,18 +199,18 @@ Resources:
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
-    Properties: 
+    Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref Vpc
 
   RouteTable:
     Type: AWS::EC2::RouteTable
-    Properties: 
-      VpcId: !Ref Vpc    
+    Properties:
+      VpcId: !Ref Vpc
 
   Route:
     Type: AWS::EC2::Route
-    Properties: 
+    Properties:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref RouteTable
@@ -245,7 +245,7 @@ Resources:
 
   EfsSg:
     Type: AWS::EC2::SecurityGroup
-    Properties: 
+    Properties:
       GroupName: !Sub "${AWS::StackName}-efs"
       GroupDescription: !Sub "${AWS::StackName}-efs"
       SecurityGroupIngress:
@@ -254,19 +254,19 @@ Resources:
         IpProtocol: tcp
         SourceSecurityGroupId: !Ref Ec2Sg
       VpcId: !Ref Vpc
-      
+
   # ====================================================
   # INSTANCE CONFIG
   # ====================================================
 
   Ec2Sg:
     Type: AWS::EC2::SecurityGroup
-    Properties: 
+    Properties:
       GroupName: !Sub "${AWS::StackName}-ec2"
       GroupDescription: !Sub "${AWS::StackName}-ec2"
       SecurityGroupIngress:
       - !If
-        - IpAddressProvided 
+        - IpAddressProvided
         - FromPort: 22
           ToPort: 22
           IpProtocol: tcp
@@ -295,12 +295,12 @@ Resources:
         ImageId: !Ref ECSAMI
         SecurityGroupIds:
         - !Ref Ec2Sg
-        KeyName: 
+        KeyName:
           !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash -xe
-            echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config 
+            echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -309,13 +309,13 @@ Resources:
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       MixedInstancesPolicy:
         InstancesDistribution:
-          OnDemandPercentageAboveBaseCapacity: 
+          OnDemandPercentageAboveBaseCapacity:
             !If [ UsingSpotInstance, 0, 100 ]
           SpotAllocationStrategy: lowest-price
           SpotMaxPrice:
             !If [ UsingSpotInstance, !Ref SpotPrice, !Ref AWS::NoValue ]
         LaunchTemplate:
-          LaunchTemplateSpecification:            
+          LaunchTemplateSpecification:
             LaunchTemplateId: !Ref LaunchTemplate
             Version: !GetAtt LaunchTemplate.LatestVersionNumber
           Overrides:
@@ -335,7 +335,7 @@ Resources:
 
   InstanceRole:
     Type: AWS::IAM::Role
-    Properties: 
+    Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -349,16 +349,16 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
       Policies:
         - PolicyName: root
-          PolicyDocument: 
+          PolicyDocument:
             Version: "2012-10-17"
-            Statement: 
+            Statement:
               - Effect: "Allow"
                 Action: "route53:*"
                 Resource: "*"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    Properties: 
+    Properties:
       Roles:
         - !Ref InstanceRole
 
@@ -369,11 +369,11 @@ Resources:
 
   EcsService:
     Type: AWS::ECS::Service
-    Properties: 
+    Properties:
       Cluster: !Ref EcsCluster
       DesiredCount: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       ServiceName: !Sub "${AWS::StackName}-ecs-service"
-      TaskDefinition: !Ref EcsTask  
+      TaskDefinition: !Ref EcsTask
       DeploymentConfiguration:
         MaximumPercent: 100
         MinimumHealthyPercent: 0
@@ -383,7 +383,7 @@ Resources:
     DependsOn:
     - MountA
     - MountB
-    Properties: 
+    Properties:
       Volumes:
       - Name: factorio
         EFSVolumeConfiguration:
@@ -415,7 +415,7 @@ Resources:
   SetDNSRecordLambdaRole:
     Type: AWS::IAM::Role
     Condition: DnsConfigEnabled
-    Properties: 
+    Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -429,9 +429,9 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: root
-          PolicyDocument: 
+          PolicyDocument:
             Version: "2012-10-17"
-            Statement: 
+            Statement:
               - Effect: "Allow"
                 Action: "route53:*"
                 Resource: "*"
@@ -442,7 +442,7 @@ Resources:
   SetDNSRecordLambda:
     Type: "AWS::Lambda::Function"
     Condition: DnsConfigEnabled
-    Properties: 
+    Properties:
       Environment:
         Variables:
           HostedZoneId: !Ref HostedZoneId
@@ -484,7 +484,7 @@ Resources:
   LaunchEvent:
     Type: AWS::Events::Rule
     Condition: DnsConfigEnabled
-    Properties: 
+    Properties:
       EventPattern:
         source:
         - aws.autoscaling
@@ -502,7 +502,7 @@ Resources:
   LaunchEventLambdaPermission:
     Type: AWS::Lambda::Permission
     Condition: DnsConfigEnabled
-    Properties: 
+    Properties:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt SetDNSRecordLambda.Arn
       Principal: events.amazonaws.com
