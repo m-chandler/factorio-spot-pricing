@@ -419,7 +419,7 @@ Resources:
           - Name: UPDATE_MODS_ON_START
             Value: !Sub "${UpdateModsOnStart}"
           - Name: DLC_SPACE_AGE
-            Value: !Sub "\${DlcSpaceAge}"
+            Value: !Sub "${DlcSpaceAge}"
 
   # ====================================================
   # SET DNS RECORD
