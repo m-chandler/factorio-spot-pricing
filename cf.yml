@@ -10,7 +10,7 @@ Parameters:
   FactorioImageTag:
     Type: String
     Description: "(Examples include latest, stable, 0.17, 0.17.33) Refer to tag descriptions available here: https://hub.docker.com/r/factoriotools/factorio/)"
-    Default: latest
+    Default: stable
 
   ServerState:
     Type: String
