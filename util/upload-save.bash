@@ -1,14 +1,20 @@
 #!/bin/bash
 
 # Check if both arguments are provided
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <path_to_MySave.zip> <ec2_address>"
+if [ $# -ne 2 -a $# -ne 3 ]; then
+    echo "Usage: $0 <path_to_MySave.zip> <ec2_address> [optional_path_to_MyKey.pem]"
     exit 1
 fi
 
 # Get the file path and EC2 address from command line arguments
 save_file="$1"
 ec2_address="$2"
+key_path=""
+
+# Check if remote name is provided
+if [ $# -eq 3 ]; then
+    key_path="-i $3"
+fi
 
 # Check if the file exists
 if [ ! -f "$save_file" ]; then
@@ -18,10 +24,10 @@ fi
 
 # Upload the save file to the EC2 instance
 echo "Uploading save file to EC2 instance..."
-scp "$save_file" "ec2-user@$ec2_address:~/"
+scp $key_path "$save_file" "ec2-user@$ec2_address:~/"
 
 # SSH into the EC2 instance and perform the required operations
-ssh "ec2-user@$ec2_address" << EOF
+ssh $key_path "ec2-user@$ec2_address" << EOF
     # Get the Factorio container ID
     container_id=\$(docker ps | grep factoriotools/factorio | awk '{print \$1}' | cut -c1-3)
 
