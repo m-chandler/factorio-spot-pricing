@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Check if both arguments are provided
-if [ $# -ne 2 -a $# -ne 3 ]; then
-    echo "Usage: $0 <path_to_MySave.zip> <ec2_address> [optional_path_to_MyKey.pem]"
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <path_to_MySave.zip> <ec2_address>"
     exit 1
 fi
 
@@ -11,9 +11,9 @@ save_file="$1"
 ec2_address="$2"
 key_path=""
 
-# Check if remote name is provided
-if [ $# -eq 3 ]; then
-    key_path="-i $3"
+# Check if custom PEM file is provided
+if [ -n "$FACTORIO_PEM" ]; then
+    key_path="-i $FACTORIO_PEM"
 fi
 
 # Check if the file exists

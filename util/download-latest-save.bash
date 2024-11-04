@@ -1,17 +1,17 @@
 #!/bin/bash
 
 # Check if remote name is provided
-if [ $# -ne 1 -a $# -ne 2 ]; then
-    echo "Usage: $0 <remote_name> [optional_path_to_MyKey.pem]"
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <remote_name>"
     exit 1
 fi
 
 remote_name="$1"
 key_path=""
 
-# Check if remote name is provided
-if [ $# -eq 2 ]; then
-    key_path="-i $2"
+# Check if custom PEM file is provided
+if [ -n "$FACTORIO_PEM" ]; then
+    key_path="-i $FACTORIO_PEM"
 fi
 
 # Generate a human-readable timestamp
