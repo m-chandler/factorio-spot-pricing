@@ -9,6 +9,12 @@ fi
 # Get the file path and EC2 address from command line arguments
 save_file="$1"
 ec2_address="$2"
+key_path=""
+
+# Check if custom PEM file is provided
+if [ -n "$FACTORIO_PEM" ]; then
+    key_path="-i $FACTORIO_PEM"
+fi
 
 # Check if the file exists
 if [ ! -f "$save_file" ]; then
@@ -18,10 +24,10 @@ fi
 
 # Upload the save file to the EC2 instance
 echo "Uploading save file to EC2 instance..."
-scp "$save_file" "ec2-user@$ec2_address:~/"
+scp $key_path "$save_file" "ec2-user@$ec2_address:~/"
 
 # SSH into the EC2 instance and perform the required operations
-ssh "ec2-user@$ec2_address" << EOF
+ssh $key_path "ec2-user@$ec2_address" << EOF
     # Get the Factorio container ID
     container_id=\$(docker ps | grep factoriotools/factorio | awk '{print \$1}' | cut -c1-3)
 

@@ -69,6 +69,12 @@ Use the automation in `util/upload-save.bash` to upload your save file to your s
 bash util/upload-save.bash ~/path/to/my/save.zip $your_ec2_ip_or_remote_name
 ```
 
+Optionally, you can specify a path to a private key with a bash variable rather than relying on default ssh keys.
+
+``` bash
+FACTORIO_PEM=~/path/to/my.pem bash util/upload-save.bash ~/path/to/my/save.zip $your_ec2_ip_or_remote_name
+```
+
 This is just an automated implementation of the slower version below.
 
 ##### Fast save download (Recommended)
@@ -77,6 +83,12 @@ Use the automation in `util/download-latest-save.bash` to download the latest (m
 
 ``` bash
 bash util/download-latest-save.bash $your_ec2_ip_or_remote_name
+```
+
+Optionally, you can specify a path to a private key with a bash variable rather than relying on default ssh keys.
+
+``` bash
+FACTORIO_PEM=~/path/to/my.pem bash util/download-latest-save.bash $your_ec2_ip_or_remote_name
 ```
 
 Your server needs to be running for this to work and it should download your latest save to your local directory.
