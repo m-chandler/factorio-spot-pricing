@@ -92,6 +92,14 @@ Parameters:
     - true
     - false
 
+  AutoUpdateServer:
+    Type: String
+    Description: If enabled, the server will automatically update to the latest version when it becomes available.
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -103,6 +111,7 @@ Metadata:
         - ServerState
         - EnableRcon
         - UpdateModsOnStart
+        - AutoUpdateServer
       - Label:
           default: Instance Configuration
         Parameters:
@@ -142,6 +151,8 @@ Metadata:
         default: "Do you wish to enable RCON?"
       UpdateModsOnStart:
         default: "Do you wish to update your mods on container start"
+      AutoUpdateServer:
+        default: "Should the server automatically update when new versions are available?"
 Conditions:
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
@@ -149,6 +160,7 @@ Conditions:
   DoEnableRcon: !Equals [ !Ref EnableRcon, 'true' ]
   UsingSpotInstance: !Equals [ !Ref InstancePurchaseMode, 'Spot' ]
   InstanceTypeProvided: !Not [ !Equals [ !Ref InstanceType, '' ] ]
+  AutoUpdateEnabled: !Equals [ !Ref AutoUpdateServer, 'true' ]
 
 Mappings:
   ServerState:
@@ -519,7 +531,279 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt SetDNSRecordLambda.Arn
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt LaunchEvent.Arn
+
+  # ====================================================
+  # AUTO UPDATE CONFIGURATION
+  # ====================================================
+
+  AutoUpdateLambda:
+    Type: AWS::Lambda::Function
+    Condition: AutoUpdateEnabled
+    Properties:
+      Role: !GetAtt AutoUpdateLambdaRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 300  # 5 minutes
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import json
+          import urllib.request
+          import logging
+          import time
+          from urllib.error import URLError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def make_request(url, timeout=5):
+              try:
+                  req = urllib.request.Request(
+                      url,
+                      headers={'User-Agent': 'AWS Lambda Function'}
+                  )
+                  with urllib.request.urlopen(req, timeout=timeout) as response:
+                      return json.loads(response.read().decode())
+              except URLError as e:
+                  logger.error(f"Failed to fetch {url}: {str(e)}")
+                  raise
+              except Exception as e:
+                  logger.error(f"Error processing {url}: {str(e)}")
+                  raise
+
+          def get_dockerhub_tag():
+              try:
+                  # Get stable tag info
+                  stable_data = make_request("https://hub.docker.com/v2/repositories/factoriotools/factorio/tags/stable")
+                  stable_digest = stable_data.get('digest')
+                  if not stable_digest:
+                      raise ValueError("Could not get stable digest")
+
+                  # Get version tags
+                  tags_data = make_request("https://hub.docker.com/v2/repositories/factoriotools/factorio/tags?page_size=100")
+                  for tag in tags_data.get('results', []):
+                      if tag.get('digest') == stable_digest and tag.get('name').replace('.', '').isdigit():
+                          return tag.get('name')
+                  return None
+              except Exception as e:
+                  logger.error(f"Error in get_dockerhub_tag: {str(e)}")
+                  raise
+
+          def get_current_version(cfn_client, stack_name):
+              try:
+                  response = cfn_client.describe_stacks(StackName=stack_name)
+                  for param in response['Stacks'][0]['Parameters']:
+                      if param['ParameterKey'] == 'FactorioImageTag':
+                          return param['ParameterValue']
+                  return None
+              except Exception as e:
+                  logger.error(f"Error getting current version: {str(e)}")
+                  raise
+
+          def wait_for_stack_update(cfn_client, stack_name, max_wait_seconds=240):
+              """
+              Waits for stack update to complete and returns the final status.
+              """
+              start_time = time.time()
+              while time.time() - start_time < max_wait_seconds:
+                  try:
+                      response = cfn_client.describe_stacks(StackName=stack_name)
+                      status = response['Stacks'][0]['StackStatus']
+                      
+                      if status == 'UPDATE_COMPLETE':
+                          return True, "Stack update completed successfully"
+                      elif status == 'UPDATE_ROLLBACK_COMPLETE':
+                          events = cfn_client.describe_stack_events(StackName=stack_name)
+                          for event in events['StackEvents']:
+                              if event['ResourceStatus'].endswith('FAILED'):
+                                  return False, f"Stack update rolled back. Reason: {event.get('ResourceStatusReason', 'Unknown error')}"
+                          return False, "Stack update rolled back"
+                      elif status.endswith('FAILED'):
+                          events = cfn_client.describe_stack_events(StackName=stack_name)
+                          for event in events['StackEvents']:
+                              if event['ResourceStatus'].endswith('FAILED'):
+                                  return False, f"Stack update failed. Reason: {event.get('ResourceStatusReason', 'Unknown error')}"
+                          return False, f"Stack update failed with status: {status}"
+                      
+                      logger.info(f"Current stack status: {status}")
+                      time.sleep(10)
+                      
+                  except Exception as e:
+                      logger.error(f"Error checking stack status: {str(e)}")
+                      return False, f"Error checking stack status: {str(e)}"
+              
+              return False, f"Timeout waiting for stack update after {max_wait_seconds} seconds"
+
+          def update_stack_parameter(cfn_client, stack_name, version):
+              """
+              Updates the FactorioImageTag parameter in the CloudFormation stack.
+              """
+              try:
+                  response = cfn_client.describe_stacks(StackName=stack_name)
+                  current_params = response['Stacks'][0]['Parameters']
+                  
+                  new_params = [
+                      {'ParameterKey': 'FactorioImageTag', 'ParameterValue': version}
+                      if param['ParameterKey'] == 'FactorioImageTag'
+                      else {'ParameterKey': param['ParameterKey'], 'UsePreviousValue': True}
+                      for param in current_params
+                  ]
+                  
+                  cfn_client.update_stack(
+                      StackName=stack_name,
+                      UsePreviousTemplate=True,
+                      Parameters=new_params,
+                      Capabilities=['CAPABILITY_IAM']
+                  )
+                  logger.info(f"Stack update initiated with FactorioImageTag={version}")
+                  
+                  return wait_for_stack_update(cfn_client, stack_name)
+                  
+              except cfn_client.exceptions.ClientError as e:
+                  error_message = str(e)
+                  if 'No updates are to be performed' in error_message:
+                      return True, "No updates needed - parameters already set to desired values"
+                  logger.error(f"CloudFormation update error: {error_message}")
+                  return False, f"Failed to update stack: {error_message}"
+              except Exception as e:
+                  error_message = str(e)
+                  logger.error(f"Unexpected error during stack update: {error_message}")
+                  return False, f"Unexpected error: {error_message}"
+
+          def handler(event, context):
+              try:
+                  cfn = boto3.client('cloudformation')
+                  stack_name = os.environ['STACK_NAME']
+
+                  current_version = get_current_version(cfn, stack_name)
+                  latest_version = get_dockerhub_tag()
+                  if not latest_version:
+                      return {
+                          'statusCode': 500,
+                          'body': json.dumps({
+                              'success': False,
+                              'message': "Could not determine latest version"
+                          })
+                      }
+                  
+                  logger.info(f"Current version: {current_version}, Latest version: {latest_version}")
+                  if latest_version != current_version:
+                      logger.info(f"Updating stack to latest version: {latest_version}")
+                      success, update_message = update_stack_parameter(cfn, stack_name, latest_version)
+                      logger.info(f"Update result: {success}, Message: {update_message}")
+                      return {
+                          'statusCode': 200 if success else 500,
+                          'body': json.dumps({
+                              'success': success,
+                              'message': update_message,
+                              'oldVersion': current_version,
+                              'newVersion': latest_version
+                          })
+                      }
+                  message = f"No update needed - current version is {current_version}"
+                  logger.info(message)
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'success': True,
+                          'message': message,
+                          'currentVersion': current_version
+                      })
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error in handler: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'success': False,
+                          'message': f"Error occurred: {str(e)}"
+                      })
+                  }
+
+  AutoUpdateLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: AutoUpdateEnabled
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AutoUpdateAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RegisterTaskDefinition
+                  - ecs:DeregisterTaskDefinition
+                  - ecs:DescribeTaskDefinition
+                  - ecs:ListTaskDefinitions
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - ecs:ListServices
+                  - ecs:DescribeClusters
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - ecs:StopTask
+                  - iam:PassRole
+                Resource:
+                  - !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}'
+                  - !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${EcsCluster}/*'
+                  - !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/${AWS::StackName}*'
+                  - !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/${EcsCluster}/*'
+                  - !GetAtt InstanceRole.Arn
+              - Effect: Allow
+                Action:
+                  - ecs:DeregisterTaskDefinition
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStackEvents
+                Resource:
+                  - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}::parameter/aws/service/ecs/*'
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeImages
+                Resource: "*"
+
+  AutoUpdateScheduleRule:
+    Type: AWS::Events::Rule
+    Condition: AutoUpdateEnabled
+    Properties:
+      Description: "Schedule for checking Factorio updates daily at 7:15 AM Eastern"
+      ScheduleExpression: "cron(15 11 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AutoUpdateLambda.Arn
+          Id: !Sub "${AWS::StackName}-auto-update-target"
+
+  AutoUpdateLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: AutoUpdateEnabled
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt AutoUpdateLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AutoUpdateScheduleRule.Arn
 
 Outputs:
   CheckInstanceIp:
