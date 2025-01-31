@@ -312,6 +312,30 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash -xe
             echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+            
+            # Only run DNS update if DNS is enabled
+            if [ "${HostedZoneId}" != "" ] && [ "${RecordName}" != "" ]; then
+              # Install AWS CLI
+              yum install -y aws-cli
+              # Get instance ID and public IP
+              PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+              
+              # Update Route53 DNS record
+              aws route53 change-resource-record-sets \
+                --hosted-zone-id ${HostedZoneId} \
+                --change-batch '{
+                  "Changes": [{
+                    "Action": "UPSERT",
+                    "ResourceRecordSet": {
+                      "Name": "${RecordName}",
+                      "Type": "A",
+                      "TTL": 60,
+                      "ResourceRecords": [{"Value":"'$PUBLIC_IP'"}]
+                    }
+                  }]
+                }' \
+                --region ${AWS::Region}
+            fi
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -420,106 +444,6 @@ Resources:
             Value: !Sub "${UpdateModsOnStart}"
           - Name: DLC_SPACE_AGE
             Value: !Sub "${DlcSpaceAge}"
-
-  # ====================================================
-  # SET DNS RECORD
-  # ====================================================
-
-  SetDNSRecordLambdaRole:
-    Type: AWS::IAM::Role
-    Condition: DnsConfigEnabled
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - lambda.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: "Allow"
-                Action: "route53:*"
-                Resource: "*"
-              - Effect: "Allow"
-                Action: "ec2:DescribeInstance*"
-                Resource: "*"
-
-  SetDNSRecordLambda:
-    Type: "AWS::Lambda::Function"
-    Condition: DnsConfigEnabled
-    Properties:
-      Environment:
-        Variables:
-          HostedZoneId: !Ref HostedZoneId
-          RecordName: !Ref RecordName
-      Code:
-        ZipFile: |
-          import boto3
-          import os
-          def handler(event, context):
-            new_instance = boto3.resource('ec2').Instance(event['detail']['EC2InstanceId'])
-            boto3.client('route53').change_resource_record_sets(
-              HostedZoneId= os.environ['HostedZoneId'],
-              ChangeBatch={
-                  'Comment': 'updating',
-                  'Changes': [
-                      {
-                          'Action': 'UPSERT',
-                          'ResourceRecordSet': {
-                              'Name': os.environ['RecordName'],
-                              'Type': 'A',
-                              'TTL': 60,
-                              'ResourceRecords': [
-                                  {
-                                      'Value': new_instance.public_ip_address
-                                  },
-                              ]
-                          }
-                      },
-                  ]
-              })
-      Description: Sets Route 53 DNS Record for Factorio
-      FunctionName: !Sub "${AWS::StackName}-set-dns"
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt SetDNSRecordLambdaRole.Arn
-      Runtime: python3.12
-      Timeout: 20
-
-  LaunchEvent:
-    Type: AWS::Events::Rule
-    Condition: DnsConfigEnabled
-    Properties:
-      EventPattern:
-        source:
-        - aws.autoscaling
-        detail-type:
-        - EC2 Instance Launch Successful
-        detail:
-          AutoScalingGroupName:
-          - !Ref AutoScalingGroup
-      Name: !Sub "${AWS::StackName}-instance-launch"
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt SetDNSRecordLambda.Arn
-          Id: !Sub "${AWS::StackName}-set-dns"
-
-  LaunchEventLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Condition: DnsConfigEnabled
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt SetDNSRecordLambda.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt LaunchEvent.Arn
 
 Outputs:
   CheckInstanceIp:
